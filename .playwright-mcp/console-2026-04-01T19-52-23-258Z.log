@@ -1,0 +1,7 @@
+[     533ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5174/favicon.ico:0
+[   71375ms] TypeError: Cannot set properties of null (setting 'textContent')
+    at renderDashboard (http://localhost:5174/src/main.ts:364:37)
+    at async http://localhost:5174/src/main.ts:474:7
+[  101415ms] TypeError: Cannot set properties of null (setting 'textContent')
+    at renderDashboard (http://localhost:5174/src/main.ts:364:37)
+    at async http://localhost:5174/src/main.ts:474:7

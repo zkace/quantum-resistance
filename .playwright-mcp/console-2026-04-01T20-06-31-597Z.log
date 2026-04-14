@@ -1,0 +1,2 @@
+[     929ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ https://zkace-vault.vercel.app/wasm/zk_ace_stark_wasm.js:304
+[    1435ms] [LOG] STARK WASM prover loaded (484 KB) @ https://zkace-vault.vercel.app/assets/index-0ddtCv5j.js:2089

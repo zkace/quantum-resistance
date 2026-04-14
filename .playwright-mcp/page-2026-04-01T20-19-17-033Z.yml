@@ -1,0 +1,14 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e6]: Arbitrum One
+  - generic [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e14]: 🛡️
+      - heading "Quantum-Resistant Vault" [level=1] [ref=e15]:
+        - text: Quantum-Resistant
+        - text: Vault
+      - paragraph [ref=e16]: Protect your assets with zero-knowledge proofs. No private keys. No classical crypto. Pure post-quantum security.
+    - generic [ref=e17]:
+      - button "Create New Vault" [ref=e18] [cursor=pointer]
+      - button "Import Existing Vault" [ref=e19] [cursor=pointer]

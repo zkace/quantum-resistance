@@ -1,0 +1,51 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e5]:
+      - generic [ref=e6]: Arbitrum One
+      - button "Lock" [ref=e75] [cursor=pointer]:
+        - img [ref=e76]
+  - generic [ref=e133]:
+    - heading "Settings" [level=2] [ref=e134]
+    - generic [ref=e135]: Security
+    - generic [ref=e136]:
+      - generic [ref=e137] [cursor=pointer]:
+        - generic [ref=e138]:
+          - generic [ref=e139]: Emergency Pause
+          - generic [ref=e140]: Freeze all vault operations
+        - generic [ref=e141]: ›
+      - generic [ref=e142] [cursor=pointer]:
+        - generic [ref=e143]:
+          - generic [ref=e144]: Rotate Identity
+          - generic [ref=e145]: Change identity commitment (48h timelock)
+        - generic [ref=e146]: ›
+    - generic [ref=e147]: Vault Info
+    - generic [ref=e148]:
+      - generic [ref=e150] [cursor=pointer]:
+        - generic [ref=e151]: Nonce
+        - generic [ref=e152]: Not deployed
+      - generic [ref=e154] [cursor=pointer]:
+        - generic [ref=e155]: Proof System
+        - generic [ref=e156]: STARK (Winterfell) + Keccak256
+      - generic [ref=e158] [cursor=pointer]:
+        - generic [ref=e159]: Security Level
+        - generic [ref=e160]: 128-bit post-quantum
+    - generic [ref=e161]: Danger Zone
+    - generic [ref=e163] [cursor=pointer]:
+      - generic [ref=e164]:
+        - generic [ref=e165]: Export Recovery Phrase
+        - generic [ref=e166]: Reveal your 24-word phrase
+      - generic [ref=e167]: ›
+  - generic [ref=e102]:
+    - button "🏠 Vault" [ref=e103] [cursor=pointer]:
+      - generic [ref=e104]: 🏠
+      - text: Vault
+    - button "↑ Send" [ref=e105] [cursor=pointer]:
+      - generic [ref=e106]: ↑
+      - text: Send
+    - button "↓ Receive" [ref=e107] [cursor=pointer]:
+      - generic [ref=e108]: ↓
+      - text: Receive
+    - button "⚙️ Settings" [active] [ref=e109] [cursor=pointer]:
+      - generic [ref=e110]: ⚙️
+      - text: Settings

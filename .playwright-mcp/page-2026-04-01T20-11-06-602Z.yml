@@ -1,0 +1,44 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e5]:
+      - generic [ref=e6]: Arbitrum One
+      - button "Lock" [ref=e75] [cursor=pointer]:
+        - img [ref=e76]
+  - generic [ref=e79]:
+    - generic [ref=e80]:
+      - generic [ref=e81]: 0x5099B5…B558aA
+      - button "Copy" [ref=e82] [cursor=pointer]
+    - generic [ref=e83]:
+      - generic [ref=e84]: 0 ETH
+      - generic [ref=e85]: $0.00
+      - generic [ref=e86]: Quantum Protected
+    - generic [ref=e87]:
+      - button "↑ Send" [ref=e88] [cursor=pointer]:
+        - generic [ref=e89]: ↑
+        - text: Send
+      - button "↓ Receive" [ref=e90] [cursor=pointer]:
+        - generic [ref=e91]: ↓
+        - text: Receive
+    - generic [ref=e92]: Assets
+    - generic [ref=e94]:
+      - generic [ref=e95]: Ξ
+      - generic [ref=e96]:
+        - generic [ref=e97]: Ethereum
+        - generic [ref=e98]: ETH
+      - generic [ref=e99]:
+        - generic [ref=e100]: "0"
+        - generic [ref=e101]: $0.00
+  - generic [ref=e102]:
+    - button "🏠 Vault" [ref=e103] [cursor=pointer]:
+      - generic [ref=e104]: 🏠
+      - text: Vault
+    - button "↑ Send" [ref=e105] [cursor=pointer]:
+      - generic [ref=e106]: ↑
+      - text: Send
+    - button "↓ Receive" [ref=e107] [cursor=pointer]:
+      - generic [ref=e108]: ↓
+      - text: Receive
+    - button "⚙️ Settings" [ref=e109] [cursor=pointer]:
+      - generic [ref=e110]: ⚙️
+      - text: Settings

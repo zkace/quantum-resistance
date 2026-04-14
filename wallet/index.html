@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZK-ACE Quantum Vault</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface2: #1a2236;
+      --border: #1e293b;
+      --accent: #00e5ff;
+      --accent2: #7c4dff;
+      --green: #69f0ae;
+      --red: #ff5252;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Header */
+    .header {
+      width: 100%;
+      padding: 24px 32px;
+      background: linear-gradient(135deg, rgba(0,229,255,0.06) 0%, rgba(124,77,255,0.06) 100%);
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+    .header .tagline {
+      color: var(--text2);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      margin-top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .status-bar .chain {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text2);
+    }
+    .status-bar .chain .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    #status-msg {
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    /* Main container */
+    .main {
+      width: 100%;
+      max-width: 720px;
+      margin: 16px auto 40px;
+      padding: 0 16px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+    .tabs button {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tabs button:hover:not(:disabled) {
+      color: var(--text);
+    }
+    .tabs button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tabs button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .panel h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .panel p {
+      color: var(--text2);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    /* Buttons */
+    .btn {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #000;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+    .btn-danger {
+      background: rgba(255,82,82,0.1);
+      color: var(--red);
+      border: 1px solid rgba(255,82,82,0.3);
+    }
+    .btn-danger:hover {
+      background: rgba(255,82,82,0.2);
+    }
+    .btn-sm {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    /* Form elements */
+    .field {
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus {
+      border-color: var(--accent);
+    }
+    .field input::placeholder {
+      color: #475569;
+    }
+
+    /* Data rows */
+    .data-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(30,41,59,0.6);
+      gap: 12px;
+    }
+    .data-row:last-child {
+      border-bottom: none;
+    }
+    .data-label {
+      font-size: 13px;
+      color: var(--text2);
+      white-space: nowrap;
+      min-width: 120px;
+    }
+    .data-value {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-all;
+      text-align: right;
+      flex: 1;
+    }
+    .data-value.big {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Warning box */
+    .warning {
+      background: rgba(255,193,7,0.08);
+      border: 1px solid rgba(255,193,7,0.25);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #ffd54f;
+      margin-bottom: 16px;
+    }
+
+    /* Code block */
+    .code-block {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text2);
+      word-break: break-all;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin-top: 8px;
+    }
+
+    /* Actions row */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* Activity list */
+    .activity-row {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text2);
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(30,41,59,0.4);
+    }
+    .activity-row:last-child {
+      border-bottom: none;
+    }
+    .empty {
+      font-size: 14px;
+      color: var(--text2);
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    /* Send result */
+    .send-result {
+      margin-top: 20px;
+      padding: 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .send-result h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    /* Wallet info in status bar area */
+    .wallet-info {
+      margin-top: 8px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text2);
+      text-align: center;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .header { padding: 16px; }
+      .header h1 { font-size: 22px; }
+      .status-bar { flex-direction: column; gap: 8px; }
+      .tabs button { padding: 8px 12px; font-size: 13px; }
+      .panel { padding: 20px; }
+      .data-row { flex-direction: column; gap: 4px; }
+      .data-value { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>ZK-ACE Quantum Vault</h1>
+    <div class="tagline">Post-quantum account abstraction on Arbitrum</div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="chain">
+      <span class="dot"></span>
+      <span id="chain-name">--</span>
+      <span style="color:#475569">|</span>
+      <span>Chain <span id="chain-id">--</span></span>
+    </div>
+    <span id="status-msg">Initializing...</span>
+  </div>
+
+  <!-- Wallet quick info (shown when wallet exists) -->
+  <div id="wallet-info" class="wallet-info" style="display:none">
+    Vault: <span id="info-address"></span>
+    &nbsp;&bull;&nbsp; IDcom: <span id="info-idcom"></span>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Tabs -->
+    <div class="tabs">
+      <button id="tab-create" class="active">Create</button>
+      <button id="tab-dashboard" disabled>Dashboard</button>
+      <button id="tab-send" disabled>Send</button>
+      <button id="tab-activity" disabled>Activity</button>
+    </div>
+
+    <!-- Panel: Create Wallet -->
+    <div id="panel-create" class="panel">
+      <h2>Create Quantum-Resistant Wallet</h2>
+      <p>
+        Generate a new Root Entropy Value (REV) and salt to derive your
+        ZK-ACE identity commitment. This creates a vault address on Arbitrum
+        that can only be controlled by proving knowledge of your REV via
+        zero-knowledge proofs.
+      </p>
+      <div class="warning">
+        Your REV will be stored in this browser's localStorage. It is your
+        master secret -- if someone obtains it they can control your vault.
+        Export and back it up securely. Never share it.
+      </div>
+      <div id="create-section">
+        <button id="btn-create" class="btn btn-primary">Generate Wallet</button>
+      </div>
+    </div>
+
+    <!-- Panel: Dashboard -->
+    <div id="panel-dashboard" class="panel" style="display:none">
+      <h2>Vault Dashboard</h2>
+
+      <div class="data-row">
+        <span class="data-label">Balance</span>
+        <span id="dash-balance" class="data-value big">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Vault Address</span>
+        <span id="dash-address" class="data-value">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Identity Commitment</span>
+        <span id="dash-idcom" class="data-value">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">ZK Nonce</span>
+        <span id="dash-nonce" class="data-value">--</span>
+      </div>
+
+      <div class="actions">
+        <button id="btn-refresh" class="btn btn-secondary">Refresh</button>
+        <button id="btn-export" class="btn btn-secondary">Export Backup</button>
+        <button id="btn-delete" class="btn btn-danger">Delete Wallet</button>
+      </div>
+    </div>
+
+    <!-- Panel: Send -->
+    <div id="panel-send" class="panel" style="display:none">
+      <h2>Send ETH</h2>
+      <p>
+        Build a transaction to send ETH from your quantum-resistant vault.
+        The ZK proof will authorize the transfer without revealing your REV.
+      </p>
+
+      <div class="field">
+        <label for="send-to">Recipient Address</label>
+        <input type="text" id="send-to" placeholder="0x..." />
+      </div>
+      <div class="field">
+        <label for="send-amount">Amount (ETH)</label>
+        <input type="text" id="send-amount" placeholder="0.01" />
+      </div>
+
+      <button id="btn-send" class="btn btn-primary">Build Transaction</button>
+
+      <div id="send-result" class="send-result" style="display:none">
+        <h3>Transaction Calldata</h3>
+        <div id="send-calldata" class="code-block"></div>
+        <h3 style="margin-top:12px">CLI Proof Command</h3>
+        <div id="send-cli-hint" class="code-block"></div>
+        <p style="margin-top:12px; font-size:12px; color:var(--text2);">
+          The WASM prover module is not yet compiled. Use the CLI command above
+          to generate a proof and submit the UserOperation.
+        </p>
+      </div>
+    </div>
+
+    <!-- Panel: Activity -->
+    <div id="panel-activity" class="panel" style="display:none">
+      <h2>Activity Log</h2>
+      <div id="activity-list">
+        <div class="empty">No activity yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e5]:
+      - generic [ref=e6]: Arbitrum One
+      - button "Lock" [ref=e75] [cursor=pointer]:
+        - img [ref=e76]
+  - generic [ref=e111]:
+    - generic [ref=e112]:
+      - button "←" [ref=e113] [cursor=pointer]
+      - heading "Receive" [level=2] [ref=e114]
+    - generic [ref=e115]:
+      - generic [ref=e116]: "0x58a09b797F9B51beF53776955Ba7Bb0469B6A454"
+      - generic [ref=e117]:
+        - generic [ref=e118]: "0x58a09b797F9B51beF53776955Ba7Bb0469B6A454"
+        - button "Copy" [ref=e119] [cursor=pointer]
+      - paragraph [ref=e120]: Send any token on Arbitrum One to this address.
+  - generic [ref=e102]:
+    - button "🏠 Vault" [ref=e103] [cursor=pointer]:
+      - generic [ref=e104]: 🏠
+      - text: Vault
+    - button "↑ Send" [ref=e105] [cursor=pointer]:
+      - generic [ref=e106]: ↑
+      - text: Send
+    - button "↓ Receive" [active] [ref=e107] [cursor=pointer]:
+      - generic [ref=e108]: ↓
+      - text: Receive
+    - button "⚙️ Settings" [ref=e109] [cursor=pointer]:
+      - generic [ref=e110]: ⚙️
+      - text: Settings

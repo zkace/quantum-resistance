@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZK-ACE Vault — Quantum-Resistant Wallet</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="description" content="Protect crypto assets with browser-generated STARK proofs and explicit on-chain state. Recovery phrases stay local to the device session.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════ */
+/*  DESIGN SYSTEM                         */
+/* ═══════════════════════════════════════ */
+:root {
+  --bg:          #08080E;
+  --bg-surface:  #0F0F18;
+  --bg-card:     #151522;
+  --bg-hover:    #1A1A2E;
+  --bg-input:    #0C0C15;
+
+  --amber:       #F0A830;
+  --amber-dim:   #B07A20;
+  --amber-glow:  rgba(240,168,48,0.08);
+  --amber-bright:#FFD06B;
+  --green:       #3DDC84;
+  --red:         #FF5252;
+  --blue:        #60A5FA;
+
+  --text:        #ECEEF4;
+  --text-2:      #A0A4B8;
+  --text-3:      #5C6078;
+  --border:      rgba(255,255,255,0.06);
+  --border-active: rgba(240,168,48,0.3);
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'Outfit', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --radius:      12px;
+  --radius-sm:   8px;
+  --ease:        cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+body { min-height: 100vh; overflow-x: hidden; }
+
+::selection { background: var(--amber); color: var(--bg); }
+
+input, button, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; }
+
+/* ═══════════════════════════════════════ */
+/*  LAYOUT                                */
+/* ═══════════════════════════════════════ */
+#app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ═══════════════════════════════════════ */
+/*  HEADER                                */
+/* ═══════════════════════════════════════ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.logo span { color: var(--amber); }
+
+.header-right {
+  display: flex; align-items: center; gap: 12px;
+}
+
+.chain-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.chain-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.btn-lock {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-3);
+  transition: all 0.2s;
+}
+.btn-lock:hover { border-color: var(--amber-dim); color: var(--amber); }
+
+/* ═══════════════════════════════════════ */
+/*  SCREENS                               */
+/* ═══════════════════════════════════════ */
+.screen { display: none; animation: fadeIn 0.4s var(--ease); }
+.screen.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+/* ═══════════════════════════════════════ */
+/*  ONBOARDING                            */
+/* ═══════════════════════════════════════ */
+.onboard-hero {
+  text-align: center;
+  padding: 60px 0 40px;
+}
+
+.shield-icon {
+  width: 80px; height: 80px;
+  margin: 0 auto 24px;
+  position: relative;
+}
+
+.shield-ring {
+  position: absolute; inset: 0;
+  border: 2px solid var(--amber-dim);
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: shieldPulse 3s ease-in-out infinite;
+}
+.shield-ring:nth-child(2) { inset: -8px; animation-delay: 0.5s; opacity: 0.2; }
+.shield-ring:nth-child(3) { inset: -16px; animation-delay: 1s; opacity: 0.1; }
+
+@keyframes shieldPulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.05); opacity: 0.15; }
+}
+
+.shield-core {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem;
+}
+
+.onboard-title {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+
+.onboard-sub {
+  font-size: 0.95rem;
+  color: var(--text-2);
+  max-width: 360px;
+  margin: 0 auto 32px;
+}
+
+.onboard-actions {
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* ═══════════════════════════════════════ */
+/*  BUTTONS                               */
+/* ═══════════════════════════════════════ */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  transition: all 0.25s var(--ease);
+}
+
+.btn-primary {
+  background: var(--amber);
+  color: var(--bg);
+}
+.btn-primary:hover {
+  background: var(--amber-bright);
+  box-shadow: 0 0 30px rgba(240,168,48,0.2);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-secondary:hover {
+  border-color: var(--border-active);
+  background: var(--bg-hover);
+}
+
+.btn-ghost {
+  color: var(--text-2);
+  font-weight: 400;
+}
+.btn-ghost:hover { color: var(--text); }
+
+.btn-danger {
+  background: rgba(255,82,82,0.1);
+  border: 1px solid rgba(255,82,82,0.2);
+  color: var(--red);
+}
+.btn-danger:hover { background: rgba(255,82,82,0.15); }
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  width: auto;
+}
+
+/* ═══════════════════════════════════════ */
+/*  MNEMONIC DISPLAY                      */
+/* ═══════════════════════════════════════ */
+.mnemonic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 20px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 16px 0;
+}
+
+.mnemonic-word {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.mnemonic-num {
+  color: var(--text-3);
+  font-size: 0.65rem;
+  min-width: 16px;
+}
+
+/* ═══════════════════════════════════════ */
+/*  INPUTS                                */
+/* ═══════════════════════════════════════ */
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-2);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  outline: none;
+}
+.input:focus { border-color: var(--amber-dim); }
+.input::placeholder { color: var(--text-3); }
+
+textarea.input {
+  min-height: 100px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+/* ═══════════════════════════════════════ */
+/*  DASHBOARD                             */
+/* ═══════════════════════════════════════ */
+.vault-address-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.vault-addr {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-copy {
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  transition: all 0.2s;
+}
+.btn-copy:hover { border-color: var(--amber-dim); color: var(--amber); }
+
+.balance-display {
+  text-align: center;
+  padding: 30px 0 20px;
+}
+
+.balance-amount {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1;
+}
+
+.balance-usd {
+  font-size: 1rem;
+  color: var(--text-2);
+  margin-top: 6px;
+}
+
+.quantum-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
+  margin-top: 12px;
+  background: var(--amber-glow);
+  border: 1px solid rgba(240,168,48,0.15);
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--amber);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quantum-badge::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+  animation: shieldPulse 2s ease-in-out infinite;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 24px 0;
+}
+
+.action-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 20px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.25s var(--ease);
+}
+.action-btn:hover {
+  border-color: var(--border-active);
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+}
+
+.action-icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--amber-glow);
+  border-radius: 10px;
+  font-size: 1.2rem;
+}
+
+/* ═══════════════════════════════════════ */
+/*  ASSET LIST                            */
+/* ═══════════════════════════════════════ */
+.section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.asset-list {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.asset-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  transition: background 0.15s;
+}
+.asset-row:hover { background: var(--bg-hover); }
+.asset-row + .asset-row { border-top: 1px solid var(--border); }
+
+.asset-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.asset-info { flex: 1; }
+.asset-name { font-weight: 600; font-size: 0.88rem; }
+.asset-symbol { font-size: 0.75rem; color: var(--text-3); }
+
+.asset-balance { text-align: right; }
+.asset-amount { font-family: var(--font-mono); font-size: 0.88rem; font-weight: 500; }
+.asset-usd { font-size: 0.75rem; color: var(--text-3); }
+
+/* ═══════════════════════════════════════ */
+/*  SEND SCREEN                           */
+/* ═══════════════════════════════════════ */
+.send-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 24px;
+}
+
+.btn-back {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-2);
+  font-size: 1.1rem;
+  transition: all 0.2s;
+}
+.btn-back:hover { border-color: var(--amber-dim); color: var(--amber); }
+
+.send-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.amount-input-wrapper {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.amount-big-input {
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  width: 100%;
+  letter-spacing: -0.03em;
+}
+.amount-big-input::placeholder { color: var(--text-3); }
+
+/* ═══════════════════════════════════════ */
+/*  PROOF GENERATION OVERLAY              */
+/* ═══════════════════════════════════════ */
+.proof-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(8,8,14,0.92);
+  backdrop-filter: blur(20px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  animation: fadeIn 0.3s var(--ease);
+}
+.proof-overlay.active { display: flex; }
+
+.proof-shield {
+  width: 120px; height: 120px;
+  position: relative;
+  margin-bottom: 32px;
+}
+
+.proof-ring {
+  position: absolute; inset: 0;
+  border: 2px solid var(--amber);
+  border-radius: 50%;
+  animation: proofSpin 2s linear infinite;
+}
+.proof-ring:nth-child(2) {
+  inset: -12px;
+  border-color: var(--amber-dim);
+  animation-duration: 3s;
+  animation-direction: reverse;
+}
+.proof-ring:nth-child(3) {
+  inset: -24px;
+  border-color: rgba(240,168,48,0.2);
+  animation-duration: 5s;
+}
+
+@keyframes proofSpin {
+  0% { transform: rotate(0deg); border-style: solid; }
+  25% { border-style: dashed; }
+  50% { transform: rotate(180deg); border-style: solid; }
+  75% { border-style: dotted; }
+  100% { transform: rotate(360deg); }
+}
+
+.proof-core-icon {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem;
+}
+
+.proof-status {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.proof-detail {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  max-width: 300px;
+}
+
+/* ═══════════════════════════════════════ */
+/*  ALERTS                                */
+/* ═══════════════════════════════════════ */
+.alert {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin: 12px 0;
+  line-height: 1.5;
+}
+.alert-warn {
+  background: rgba(240,168,48,0.08);
+  border: 1px solid rgba(240,168,48,0.15);
+  color: var(--amber);
+}
+.alert-success {
+  background: rgba(61,220,132,0.08);
+  border: 1px solid rgba(61,220,132,0.15);
+  color: var(--green);
+}
+.alert-error {
+  background: rgba(255,82,82,0.08);
+  border: 1px solid rgba(255,82,82,0.15);
+  color: var(--red);
+}
+
+/* ═══════════════════════════════════════ */
+/*  SETTINGS                              */
+/* ═══════════════════════════════════════ */
+.settings-group {
+  margin-bottom: 20px;
+}
+
+.settings-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.settings-item:hover { background: var(--bg-hover); }
+
+.settings-item-label {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.settings-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.settings-item-arrow { color: var(--text-3); font-size: 1.1rem; }
+
+/* ═══════════════════════════════════════ */
+/*  RECEIVE                               */
+/* ═══════════════════════════════════════ */
+.qr-container {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 32px 0;
+}
+
+.qr-placeholder {
+  width: 200px; height: 200px;
+  background: white;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+  color: #333;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 10px;
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ═══════════════════════════════════════ */
+/*  NAV TABS                              */
+/* ═══════════════════════════════════════ */
+.nav-tabs {
+  display: flex;
+  border-top: 1px solid var(--border);
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--bg);
+  z-index: 50;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 8px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-3);
+  transition: color 0.2s;
+}
+.nav-tab:hover, .nav-tab.active { color: var(--amber); }
+.nav-tab-icon { font-size: 1.3rem; }
+
+/* ═══════════════════════════════════════ */
+/*  RESPONSIVE                            */
+/* ═══════════════════════════════════════ */
+@media (max-width: 400px) {
+  .mnemonic-grid { grid-template-columns: repeat(2, 1fr); }
+  .balance-amount { font-size: 2rem; }
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">ZK<span>-</span>ACE <span>Vault</span></div>
+    <div class="header-right">
+      <div class="chain-badge"><span class="chain-dot"></span> Arbitrum One</div>
+      <button class="btn-lock" id="btn-logout" title="Lock" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════ SCREEN: ONBOARDING ═══════ -->
+  <div class="screen active" id="screen-onboard">
+    <div class="onboard-hero">
+      <div class="shield-icon">
+        <div class="shield-ring"></div>
+        <div class="shield-ring"></div>
+        <div class="shield-ring"></div>
+        <div class="shield-core">🛡️</div>
+      </div>
+      <h1 class="onboard-title">Quantum-Resistant<br>Vault</h1>
+      <p class="onboard-sub">Protect your assets with browser-generated STARK proofs and explicit on-chain vault controls.</p>
+    </div>
+    <div class="onboard-actions">
+      <button class="btn btn-primary" id="btn-create">Create New Vault</button>
+      <button class="btn btn-secondary" id="btn-import">Import Existing Vault</button>
+    </div>
+  </div>
+
+  <!-- ═══════ SCREEN: CREATE ═══════ -->
+  <div class="screen" id="screen-create">
+    <div class="send-header">
+      <button class="btn-back" id="btn-create-back">&larr;</button>
+      <h2 class="send-title">Your Recovery Phrase</h2>
+    </div>
+    <div class="alert alert-warn">
+      Write these 24 words down and store them offline. Anyone with these words can access your vault. They cannot be recovered.
+    </div>
+    <div class="mnemonic-grid" id="mnemonic-display"></div>
+    <button class="btn btn-primary" id="btn-confirm-create" style="margin-top:12px">I've Written It Down</button>
+  </div>
+
+  <!-- ═══════ SCREEN: IMPORT ═══════ -->
+  <div class="screen" id="screen-import">
+    <div class="send-header">
+      <button class="btn-back" id="btn-import-back">&larr;</button>
+      <h2 class="send-title">Import Vault</h2>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Enter your 24-word recovery phrase</label>
+      <textarea class="input" id="import-mnemonic" placeholder="word1 word2 word3 ..."></textarea>
+    </div>
+    <button class="btn btn-primary" id="btn-confirm-import">Unlock Vault</button>
+  </div>
+
+  <!-- ═══════ SCREEN: DASHBOARD ═══════ -->
+  <div class="screen" id="screen-dashboard">
+    <div class="vault-address-bar">
+      <span class="vault-addr" id="vault-addr-display">0x...</span>
+      <button class="btn-copy" id="btn-copy-addr">Copy</button>
+    </div>
+
+    <div class="balance-display">
+      <div class="balance-amount" id="balance-eth">0.000</div>
+      <div class="balance-usd" id="balance-usd">$0.00</div>
+      <div class="quantum-badge">Quantum Protected</div>
+    </div>
+
+    <div class="action-row">
+      <button class="action-btn" id="btn-send">
+        <div class="action-icon">↑</div>
+        Send
+      </button>
+      <button class="action-btn" id="btn-receive">
+        <div class="action-icon">↓</div>
+        Receive
+      </button>
+    </div>
+
+    <div class="section-label">Assets</div>
+    <div class="asset-list" id="asset-list">
+      <div class="asset-row">
+        <div class="asset-icon">Ξ</div>
+        <div class="asset-info">
+          <div class="asset-name">Ethereum</div>
+          <div class="asset-symbol">ETH</div>
+        </div>
+        <div class="asset-balance">
+          <div class="asset-amount" id="asset-eth-amount">0.000</div>
+          <div class="asset-usd" id="asset-eth-usd">$0.00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ SCREEN: SEND ═══════ -->
+  <div class="screen" id="screen-send">
+    <div class="send-header">
+      <button class="btn-back" id="btn-send-back">&larr;</button>
+      <h2 class="send-title">Send</h2>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Recipient</label>
+      <input class="input" id="send-to" placeholder="0x...">
+    </div>
+    <div class="amount-input-wrapper">
+      <input class="amount-big-input" id="send-amount" type="text" placeholder="0.00" inputmode="decimal">
+      <div style="color:var(--text-3);font-size:0.85rem;margin-top:4px">ETH</div>
+    </div>
+    <div style="font-size:0.8rem;color:var(--text-3);text-align:center;margin-bottom:20px">
+      Authorization cost varies with current Arbitrum gas prices and bundler fees.
+    </div>
+    <button class="btn btn-primary" id="btn-authorize">
+      🛡️ Authorize with Quantum Proof
+    </button>
+  </div>
+
+  <!-- ═══════ SCREEN: RECEIVE ═══════ -->
+  <div class="screen" id="screen-receive">
+    <div class="send-header">
+      <button class="btn-back" id="btn-receive-back">&larr;</button>
+      <h2 class="send-title">Receive</h2>
+    </div>
+    <div class="qr-container">
+      <div class="qr-placeholder" id="qr-display">Your vault address will appear here</div>
+      <div class="vault-address-bar" style="width:100%">
+        <span class="vault-addr" id="receive-addr">0x...</span>
+        <button class="btn-copy" id="btn-copy-receive">Copy</button>
+      </div>
+      <p style="color:var(--text-3);font-size:0.82rem;text-align:center;margin-top:12px">
+        Send any token on Arbitrum One to this address.
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══════ SCREEN: SETTINGS ═══════ -->
+  <div class="screen" id="screen-settings">
+    <h2 style="font-family:var(--font-display);font-size:1.3rem;font-weight:600;margin-bottom:20px">Settings</h2>
+
+    <div class="section-label">Security</div>
+    <div class="settings-group">
+      <div class="settings-item" id="btn-pause">
+        <div>
+          <div class="settings-item-label" id="pause-label">Emergency Pause</div>
+          <div class="settings-item-desc" id="pause-desc">Freeze vault operations with a proof-backed UserOp.</div>
+        </div>
+        <span class="settings-item-arrow">&rsaquo;</span>
+      </div>
+      <div class="settings-item" id="btn-rotate">
+        <div>
+          <div class="settings-item-label" id="rotate-label">Rotate Identity</div>
+          <div class="settings-item-desc" id="rotate-desc">Paste a new 24-word recovery phrase to start a 48h timelock.</div>
+        </div>
+        <span class="settings-item-arrow">&rsaquo;</span>
+      </div>
+    </div>
+
+    <div class="section-label">Vault Info</div>
+    <div class="settings-group">
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Deployment</div>
+          <div class="settings-item-desc" id="settings-deployed">Unknown</div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Nonce</div>
+          <div class="settings-item-desc" id="settings-nonce">0</div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Pause State</div>
+          <div class="settings-item-desc" id="settings-paused">Unknown</div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Rotation State</div>
+          <div class="settings-item-desc" id="settings-rotation">Unknown</div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Proof System</div>
+          <div class="settings-item-desc">STARK (Winterfell) + Keccak256</div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Security Level</div>
+          <div class="settings-item-desc">Targeted 128-bit post-quantum profile</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Danger Zone</div>
+    <div class="settings-group">
+      <div class="settings-item" id="btn-export-mnemonic">
+        <div>
+          <div class="settings-item-label" style="color:var(--red)">Recovery Phrase Handling</div>
+          <div class="settings-item-desc">The app does not retain the phrase after unlock.</div>
+        </div>
+        <span class="settings-item-arrow">&rsaquo;</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV TABS (shown when logged in) -->
+  <div class="nav-tabs" id="nav-tabs" style="display:none">
+    <button class="nav-tab active" data-screen="dashboard">
+      <span class="nav-tab-icon">🏠</span> Vault
+    </button>
+    <button class="nav-tab" data-screen="send">
+      <span class="nav-tab-icon">↑</span> Send
+    </button>
+    <button class="nav-tab" data-screen="receive">
+      <span class="nav-tab-icon">↓</span> Receive
+    </button>
+    <button class="nav-tab" data-screen="settings">
+      <span class="nav-tab-icon">⚙️</span> Settings
+    </button>
+  </div>
+
+  <!-- PROOF GENERATION OVERLAY -->
+  <div class="proof-overlay" id="proof-overlay">
+    <div class="proof-shield">
+      <div class="proof-ring"></div>
+      <div class="proof-ring"></div>
+      <div class="proof-ring"></div>
+      <div class="proof-core-icon">🛡️</div>
+    </div>
+    <div class="proof-status" id="proof-status">Generating Quantum Proof</div>
+    <div class="proof-detail" id="proof-detail">Creating a zero-knowledge proof that authorizes this transaction without revealing your identity...</div>
+  </div>
+
+</div>
+
+<script type="module" src="src/main.ts"></script>
+</body>
+</html>

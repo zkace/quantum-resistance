@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+contracts/out/
+contracts/cache/
+.vercel/
+*.wasm
+.DS_Store
+
+# Internal docs (keep local only)
+ZK-ACE-*.md

@@ -1,0 +1,214 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]: ZK-ACE
+    - list [ref=e4]:
+      - listitem [ref=e5]:
+        - link "Technology" [ref=e6] [cursor=pointer]:
+          - /url: "#technology"
+      - listitem [ref=e7]:
+        - link "How It Works" [ref=e8] [cursor=pointer]:
+          - /url: "#how-it-works"
+      - listitem [ref=e9]:
+        - link "Specs" [ref=e10] [cursor=pointer]:
+          - /url: "#specs"
+      - listitem [ref=e11]:
+        - link "Security" [ref=e12] [cursor=pointer]:
+          - /url: "#security"
+      - listitem [ref=e13]:
+        - link "Deployment" [ref=e14] [cursor=pointer]:
+          - /url: "#deployment"
+    - link "Launch App" [ref=e15] [cursor=pointer]:
+      - /url: https://zkace-vault.vercel.app
+  - generic [ref=e18]:
+    - generic [ref=e19]: Live on Arbitrum One
+    - heading "Quantum-resistant wallets for the EVM" [level=1] [ref=e20]:
+      - text: Quantum-resistant
+      - text: wallets for the
+      - emphasis [ref=e21]: EVM
+    - paragraph [ref=e22]: ZK-ACE replaces ECDSA signatures with identity-bound zero-knowledge proofs. No private keys. No seed phrases. Just a 256-bit secret proven in zero knowledge — secure against both classical and quantum adversaries.
+    - generic [ref=e23]:
+      - link "How It Works ↓" [ref=e24] [cursor=pointer]:
+        - /url: "#how-it-works"
+      - link "Read the Paper ↗" [ref=e25] [cursor=pointer]:
+        - /url: https://arxiv.org/abs/2603.07974
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]: STARK
+        - generic [ref=e29]: Hash-Only Proofs
+      - generic [ref=e30]:
+        - generic [ref=e31]: "0"
+        - generic [ref=e32]: Elliptic Curves Used
+      - generic [ref=e33]:
+        - generic [ref=e34]: ~$0.20
+        - generic [ref=e35]: Per Transaction
+      - generic [ref=e36]:
+        - generic [ref=e37]: 3.4 KB
+        - generic [ref=e38]: Proof Size
+  - generic [ref=e40]:
+    - generic [ref=e41]:
+      - heading "The Problem" [level=3] [ref=e42]
+      - generic [ref=e43]:
+        - heading "ECDSA is quantum-vulnerable" [level=4] [ref=e44]
+        - paragraph [ref=e45]: Every EVM wallet relies on elliptic curve signatures. Shor's algorithm on a fault-tolerant quantum computer breaks them completely. Your funds, your NFTs, your DeFi positions — all at risk.
+      - generic [ref=e46]:
+        - heading "Post-quantum signatures are too large" [level=4] [ref=e47]
+        - paragraph [ref=e48]: NIST-standardized PQ signatures (ML-DSA, Falcon) are 2–5 KB per transaction. On rollups where calldata is the bottleneck, this is a 30–40x increase in authorization data.
+      - generic [ref=e49]:
+        - heading "Migration requires new chains" [level=4] [ref=e50]
+        - paragraph [ref=e51]: Existing quantum-resistant projects require abandoning the EVM ecosystem. Users must bridge assets to new L1s, learn new tooling, and trust unaudited infrastructure.
+    - generic [ref=e52]:
+      - heading "The ZK-ACE Solution" [level=3] [ref=e53]
+      - generic [ref=e54]:
+        - heading "Zero-knowledge authorization" [level=4] [ref=e55]
+        - paragraph [ref=e56]: Instead of signing transactions, you prove in zero knowledge that you know a secret consistent with an on-chain identity commitment. No signature object ever touches the chain.
+      - generic [ref=e57]:
+        - heading "3.4 KB STARK, not 5 KB lattice signatures" [level=4] [ref=e58]
+        - paragraph [ref=e59]: A single STARK proof replaces the entire signature. Hash-only cryptography — no elliptic curves, no pairings, nothing for Shor's algorithm to attack. Uses Keccak256 (EVM-native) and the Goldilocks field for efficient on-chain verification.
+      - generic [ref=e60]:
+        - heading "Drop-in ERC-4337 module" [level=4] [ref=e61]
+        - paragraph [ref=e62]: Works on every EVM chain today. No protocol changes. No new L1. Deploy a vault on Arbitrum, Base, Optimism, or Ethereum mainnet via a single factory call.
+  - generic [ref=e63]:
+    - text: How It Works
+    - heading "Four steps to quantum resistance" [level=2] [ref=e64]
+    - paragraph [ref=e65]: From identity creation to authorized transaction, the entire flow uses zero-knowledge proofs with no classical signing keys.
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e68]: Step 01
+        - heading "Generate Identity" [level=4] [ref=e69]
+        - paragraph [ref=e70]: "Create a 256-bit Root Entropy Value (REV) from OS randomness. Compute your identity commitment: a cryptographic hash anchored on-chain."
+        - code [ref=e71]: IDcom = Hash(REV, salt, chainId)
+      - generic [ref=e72]:
+        - generic [ref=e73]: Step 02
+        - heading "Deploy Vault" [level=4] [ref=e74]
+        - paragraph [ref=e75]: Call the factory contract with your IDcom. You get a deterministic ERC-4337 smart wallet address — works the same on every EVM chain.
+        - code [ref=e76]: factory.createAccount(IDcom, 0)
+      - generic [ref=e77]:
+        - generic [ref=e78]: Step 03
+        - heading "Prove Authorization" [level=4] [ref=e79]
+        - paragraph [ref=e80]: To authorize a transaction, generate a STARK proof that you know the REV matching the on-chain IDcom. The proof uses only Keccak256 hashing — no elliptic curves anywhere. Binds to the specific transaction, chain, and nonce.
+        - code [ref=e81]: proof = STARK.prove(REV, tx, nonce)
+      - generic [ref=e82]:
+        - generic [ref=e83]: Step 04
+        - heading "Execute On-Chain" [level=4] [ref=e84]
+        - paragraph [ref=e85]: The smart contract verifies the STARK proof using native EVM keccak256 and Goldilocks field arithmetic. Checks TxHash, domain, and Merkle commitments, advances the nonce, and executes your transaction.
+        - code [ref=e86]: verifier.verifyProof(proof, inputs)
+  - generic [ref=e87]:
+    - text: Technical Specifications
+    - heading "Built for production" [level=2] [ref=e88]
+    - paragraph [ref=e89]: Every component is implemented, tested, audited, and deployed. Not a whitepaper — a working system.
+    - generic [ref=e90]:
+      - generic [ref=e91]:
+        - heading "Proof System" [level=4] [ref=e92]
+        - generic [ref=e93]: STARK
+        - paragraph [ref=e94]: FRI-based (Winterfell). Hash-only — zero elliptic curves. Keccak256 for Merkle trees and Fiat-Shamir. No trusted setup. Fully post-quantum.
+      - generic [ref=e95]:
+        - heading "Field" [level=4] [ref=e96]
+        - generic [ref=e97]: Goldilocks
+        - paragraph [ref=e98]:
+          - text: p = 2
+          - superscript [ref=e99]: "64"
+          - text: − 2
+          - superscript [ref=e100]: "32"
+          - text: + 1. Native 64-bit arithmetic. EVM verification via mulmod/addmod opcodes (8 gas each).
+      - generic [ref=e101]:
+        - heading "Hash Function" [level=4] [ref=e102]
+        - generic [ref=e103]: Keccak256
+        - paragraph [ref=e104]: Same hash as the EVM KECCAK256 opcode (30 gas). Merkle verification is native. Quantum-secure as a symmetric primitive (128-bit post-quantum).
+      - generic [ref=e105]:
+        - heading "Proof Size" [level=4] [ref=e106]
+        - generic [ref=e107]: 43.8 KB
+        - paragraph [ref=e108]: 44 FRI queries, blowup factor 8, quadratic extension field. 132-bit soundness with 20-bit grinding. Compact for a transparent proof system.
+      - generic [ref=e109]:
+        - heading "Verification Cost" [level=4] [ref=e110]
+        - generic [ref=e111]: ~$0.20
+        - paragraph [ref=e112]: 5.6M gas on Arbitrum One with full algebraic verification (Fiat-Shamir + OOD constraints + DEEP composition + Merkle + remainder). The only deployed PQ verification on any EVM chain.
+      - generic [ref=e113]:
+        - heading "Test Coverage" [level=4] [ref=e114]
+        - generic [ref=e115]: "90"
+        - paragraph [ref=e116]: Tests across Rust (32) and Solidity (73) including STARK E2E with real proofs. Circuit soundness, field arithmetic, Merkle verification, Fiat-Shamir cross-validation, replay prevention.
+  - generic [ref=e117]:
+    - text: Security
+    - heading "Audited and hardened" [level=2] [ref=e118]
+    - paragraph [ref=e119]: Three-domain audit covering cryptographic circuits, smart contracts, and system architecture. All actionable findings resolved.
+    - generic [ref=e120]:
+      - generic [ref=e121]:
+        - generic [ref=e122]: Resolved
+        - heading "Permissionless nonce griefing" [level=4] [ref=e123]
+        - paragraph [ref=e124]: Nonce moved internal to the account contract. Only advances after valid ZK proof through the EntryPoint. No external actor can grief it.
+      - generic [ref=e125]:
+        - generic [ref=e126]: Eliminated
+        - heading "No trusted setup needed" [level=4] [ref=e127]
+        - paragraph [ref=e128]: STARKs are transparent — no toxic waste, no MPC ceremony, no trusted third parties. The Groth16 system required a ceremony; the STARK system requires nothing.
+      - generic [ref=e129]:
+        - generic [ref=e130]: Resolved
+        - heading "Identity recovery" [level=4] [ref=e131]
+        - paragraph [ref=e132]: "2-step timelock rotation: propose a new identity, wait 48 hours, confirm. Emergency pause halts all operations. Both require valid proof."
+      - generic [ref=e133]:
+        - generic [ref=e134]: Resolved
+        - heading "Public input validation" [level=4] [ref=e135]
+        - paragraph [ref=e136]: All public inputs validated as Goldilocks field elements. TxHash recomputed from calldata on-chain. Domain checked against block.chainid.
+      - generic [ref=e137]:
+        - generic [ref=e138]: Deployed
+        - heading "Fully post-quantum" [level=4] [ref=e139]
+        - paragraph [ref=e140]: STARK verifier deployed on Arbitrum One. Keccak256 + Goldilocks field only — zero elliptic curves, zero pairings. Nothing for Shor's algorithm to attack.
+      - generic [ref=e141]:
+        - generic [ref=e142]: Resolved
+        - heading "REV memory safety" [level=4] [ref=e143]
+        - paragraph [ref=e144]: ZkAceWitness implements zeroization on drop. No Clone or Debug derive. REV is wiped from memory after proof generation.
+  - generic [ref=e145]:
+    - text: Live Deployment
+    - heading "Verified on Arbitrum One" [level=2] [ref=e146]
+    - paragraph [ref=e147]: Both Groth16 (fast) and STARK (post-quantum) verifiers deployed and E2E tested on Arbitrum One mainnet.
+    - table [ref=e148]:
+      - rowgroup [ref=e149]:
+        - row "Contract Address Network Type" [ref=e150]:
+          - columnheader "Contract" [ref=e151]
+          - columnheader "Address" [ref=e152]
+          - columnheader "Network" [ref=e153]
+          - columnheader "Type" [ref=e154]
+      - rowgroup [ref=e155]:
+        - row "StarkVerifier (complete) 0xE1B8750ED6Fd835e7D27a1A4F08532BDbFb9F6d4 Arbitrum One Post-Quantum" [ref=e156]:
+          - cell "StarkVerifier (complete)" [ref=e157]:
+            - strong [ref=e158]: StarkVerifier (complete)
+          - cell "0xE1B8750ED6Fd835e7D27a1A4F08532BDbFb9F6d4" [ref=e159]
+          - cell "Arbitrum One" [ref=e160]:
+            - generic [ref=e161]: Arbitrum One
+          - cell "Post-Quantum" [ref=e163]
+        - row "Groth16 Verifier 0xfA56E270c36849072F41e8D44884fcae2CB9c70c Arbitrum One Classical" [ref=e164]:
+          - cell "Groth16 Verifier" [ref=e165]:
+            - strong [ref=e166]: Groth16 Verifier
+          - cell "0xfA56E270c36849072F41e8D44884fcae2CB9c70c" [ref=e167]
+          - cell "Arbitrum One" [ref=e168]:
+            - generic [ref=e169]: Arbitrum One
+          - cell "Classical" [ref=e171]
+        - row "Account Factory 0xf50Fa247F5C0FCB5524f7dcf3A709F3345dfeF0d Arbitrum One CREATE2" [ref=e172]:
+          - cell "Account Factory" [ref=e173]:
+            - strong [ref=e174]: Account Factory
+          - cell "0xf50Fa247F5C0FCB5524f7dcf3A709F3345dfeF0d" [ref=e175]
+          - cell "Arbitrum One" [ref=e176]:
+            - generic [ref=e177]: Arbitrum One
+          - cell "CREATE2" [ref=e179]
+  - generic [ref=e180]:
+    - text: Get Started
+    - heading "The quantum clock is ticking" [level=2] [ref=e181]
+    - paragraph [ref=e182]: Deploy your quantum-resistant vault today. It takes one CLI command and costs less than a penny.
+    - generic [ref=e183]:
+      - link "Read the Paper" [ref=e184] [cursor=pointer]:
+        - /url: https://arxiv.org/abs/2603.07974
+      - link "View on GitHub" [ref=e185] [cursor=pointer]:
+        - /url: https://github.com
+  - contentinfo [ref=e186]:
+    - generic [ref=e187]:
+      - text: © 2026 ZK-ACE · Built on
+      - link "arXiv:2603.07974" [ref=e188] [cursor=pointer]:
+        - /url: https://arxiv.org/abs/2603.07974
+    - list [ref=e189]:
+      - listitem [ref=e190]:
+        - link "Arbiscan" [ref=e191] [cursor=pointer]:
+          - /url: https://arbiscan.io/address/0xE1B8750ED6Fd835e7D27a1A4F08532BDbFb9F6d4
+      - listitem [ref=e192]:
+        - link "Paper" [ref=e193] [cursor=pointer]:
+          - /url: https://arxiv.org/abs/2603.07974
+      - listitem [ref=e194]:
+        - link "GitHub" [ref=e195] [cursor=pointer]:
+          - /url: https://github.com

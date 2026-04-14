@@ -1,0 +1,83 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e6]: Arbitrum One
+  - generic [ref=e20]:
+    - generic [ref=e21]:
+      - button "←" [ref=e22] [cursor=pointer]
+      - heading "Your Recovery Phrase" [level=2] [ref=e23]
+    - generic [ref=e24]: Write these 24 words down and store them offline. Anyone with these words can access your vault. They cannot be recovered.
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]: "1"
+        - text: planet
+      - generic [ref=e28]:
+        - generic [ref=e29]: "2"
+        - text: kind
+      - generic [ref=e30]:
+        - generic [ref=e31]: "3"
+        - text: thing
+      - generic [ref=e32]:
+        - generic [ref=e33]: "4"
+        - text: update
+      - generic [ref=e34]:
+        - generic [ref=e35]: "5"
+        - text: damp
+      - generic [ref=e36]:
+        - generic [ref=e37]: "6"
+        - text: injury
+      - generic [ref=e38]:
+        - generic [ref=e39]: "7"
+        - text: tuition
+      - generic [ref=e40]:
+        - generic [ref=e41]: "8"
+        - text: useless
+      - generic [ref=e42]:
+        - generic [ref=e43]: "9"
+        - text: rare
+      - generic [ref=e44]:
+        - generic [ref=e45]: "10"
+        - text: wreck
+      - generic [ref=e46]:
+        - generic [ref=e47]: "11"
+        - text: fame
+      - generic [ref=e48]:
+        - generic [ref=e49]: "12"
+        - text: pledge
+      - generic [ref=e50]:
+        - generic [ref=e51]: "13"
+        - text: recycle
+      - generic [ref=e52]:
+        - generic [ref=e53]: "14"
+        - text: develop
+      - generic [ref=e54]:
+        - generic [ref=e55]: "15"
+        - text: broccoli
+      - generic [ref=e56]:
+        - generic [ref=e57]: "16"
+        - text: shop
+      - generic [ref=e58]:
+        - generic [ref=e59]: "17"
+        - text: toy
+      - generic [ref=e60]:
+        - generic [ref=e61]: "18"
+        - text: shed
+      - generic [ref=e62]:
+        - generic [ref=e63]: "19"
+        - text: manual
+      - generic [ref=e64]:
+        - generic [ref=e65]: "20"
+        - text: siren
+      - generic [ref=e66]:
+        - generic [ref=e67]: "21"
+        - text: know
+      - generic [ref=e68]:
+        - generic [ref=e69]: "22"
+        - text: rocket
+      - generic [ref=e70]:
+        - generic [ref=e71]: "23"
+        - text: arrest
+      - generic [ref=e72]:
+        - generic [ref=e73]: "24"
+        - text: hammer
+    - button "I've Written It Down" [ref=e74] [cursor=pointer]

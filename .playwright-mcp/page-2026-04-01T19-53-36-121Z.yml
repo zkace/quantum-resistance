@@ -1,0 +1,32 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ZK-ACE Vault
+    - generic [ref=e5]:
+      - generic [ref=e6]: Arbitrum One
+      - button "Lock" [ref=e75] [cursor=pointer]:
+        - img [ref=e76]
+  - generic [ref=e121]:
+    - generic [ref=e122]:
+      - button "←" [ref=e123] [cursor=pointer]
+      - heading "Send" [level=2] [ref=e124]
+    - generic [ref=e125]:
+      - generic [ref=e126]: Recipient
+      - textbox "0x... or ENS name" [ref=e127]
+    - generic [ref=e128]:
+      - textbox "0.00" [ref=e129]
+      - generic [ref=e130]: ETH
+    - generic [ref=e131]: "Authorization cost: ~$0.20 (quantum proof)"
+    - button "🛡️ Authorize with Quantum Proof" [ref=e132] [cursor=pointer]
+  - generic [ref=e102]:
+    - button "🏠 Vault" [ref=e103] [cursor=pointer]:
+      - generic [ref=e104]: 🏠
+      - text: Vault
+    - button "↑ Send" [active] [ref=e105] [cursor=pointer]:
+      - generic [ref=e106]: ↑
+      - text: Send
+    - button "↓ Receive" [ref=e107] [cursor=pointer]:
+      - generic [ref=e108]: ↓
+      - text: Receive
+    - button "⚙️ Settings" [ref=e109] [cursor=pointer]:
+      - generic [ref=e110]: ⚙️
+      - text: Settings

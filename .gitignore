@@ -1,0 +1,25 @@
+node_modules/
+dist/
+target/
+contracts/out/
+contracts/cache/
+.vercel/
+*.wasm
+.DS_Store
+
+# Internal docs (keep local only)
+ZK-ACE-*.md
+
+# Internal audit and planning docs
+AUDIT_REPORT*.md*
+docs/audit/
+docs/superpowers/
+wallet/
+crates/zk-ace-circuit/
+crates/zk-ace-prover/
+crates/zk-ace-didp/
+crates/zk-ace-wasm/
+.playwright-mcp/
+.claude/
+zkace-logo.*
+zkace-twitter-banner.*

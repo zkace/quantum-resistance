@@ -1,0 +1,1114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>ZK-ACE: The Complete Guide</title><style>:root{--bg:#08080E;--surface:#0F0F18;--amber:#F0A830;--text:#ECEEF4;--text2:#A0A4B8;--border:rgba(255,255,255,0.06);--green:#3DDC84}*{margin:0;padding:0;box-sizing:border-box}html{background:var(--bg);color:var(--text);font-family:"Outfit",system-ui,sans-serif;font-size:15px;line-height:1.7}body{max-width:780px;margin:0 auto;padding:40px 24px 80px}::selection{background:var(--amber);color:var(--bg)}h1{font-family:"Fraunces",Georgia,serif;font-size:2.2rem;font-weight:700;margin:48px 0 8px}h2{font-family:"Fraunces",Georgia,serif;font-size:1.6rem;font-weight:600;margin:48px 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border)}h3{font-size:1.2rem;font-weight:600;margin:32px 0 8px;color:var(--amber)}h4{font-size:1rem;font-weight:600;margin:24px 0 6px}p{margin:8px 0 16px;color:var(--text2)}strong{color:var(--text)}em{color:var(--amber)}a{color:var(--amber);text-decoration:none}hr{border:none;border-top:1px solid var(--border);margin:32px 0}code{font-family:"JetBrains Mono",monospace;font-size:0.85em;background:var(--surface);padding:2px 6px;border-radius:4px;color:var(--green)}pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;overflow-x:auto;margin:12px 0 20px}pre code{background:none;padding:0;font-size:0.82rem;color:var(--text2)}table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:0.88rem}th{text-align:left;padding:10px 12px;background:var(--surface);border:1px solid var(--border);color:var(--amber);font-weight:600;font-size:0.78rem;text-transform:uppercase}td{padding:10px 12px;border:1px solid var(--border);color:var(--text2)}ul{margin:8px 0 16px;padding-left:24px}li{margin:4px 0;color:var(--text2)}blockquote{border-left:3px solid var(--amber);padding:8px 16px;margin:12px 0 20px;background:var(--surface);border-radius:0 8px 8px 0;color:var(--text2)}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"></head><body><h1>ZK-ACE: The Complete Guide</h1>
+<p><strong>A quantum-resistant wallet for Ethereum, explained from first principles.</strong></p>
+<p><em>For someone who studied math but hasn't touched cryptography.</em></p>
+<hr>
+<h2>Part 0: The Cryptography Landscape</h2>
+<p><em>Everything you need to hold your own in a conversation about cryptography, quantum threats, and where ZK-ACE sits in the bigger picture.</em></p>
+<h3>How modern cryptography works</h3>
+<p>All of cryptography rests on <strong>one-way functions</strong> — things that are easy to compute forward but hard to reverse. There are two families:</p>
+<p><strong>Symmetric cryptography</strong> (one key for both sides):</p>
+<ul>
+<li>AES (encryption), SHA-256, Keccak256 (hashing), HMAC (authentication)</li>
+<li>Security assumption: the functions behave like random oracles — no shortcut to invert them</li>
+<li>Quantum impact: <strong>Grover's algorithm</strong> gives a quadratic speedup (square root), so 256-bit security becomes 128-bit. Still safe — just double your key sizes.</li>
+</ul>
+<p><strong>Asymmetric cryptography</strong> (public key + private key):</p>
+<ul>
+<li>RSA, Diffie-Hellman, <strong>ECDSA</strong> (what Ethereum uses), EdDSA</li>
+<li>Security assumption: specific math problems are hard — factoring (RSA), discrete logarithm (DH), elliptic curve discrete logarithm (ECDSA)</li>
+<li>Quantum impact: <strong>Shor's algorithm</strong> solves ALL of these in polynomial time. Complete break. Not "weakened" — <strong>broken</strong>.</li>
+</ul>
+<p>This is the core asymmetry: quantum computers destroy asymmetric crypto but only mildly dent symmetric crypto.</p>
+<h3>The three hard problems that underpin today's internet</h3>
+<table><thead><tr>
+<th>Problem</th>
+<th>Used by</th>
+<th>Classical hardness</th>
+<th>Quantum hardness</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Integer factoring</strong></td>
+<td>RSA</td>
+<td>Sub-exponential (hard)</td>
+<td>Polynomial — <strong>broken</strong> by Shor</td>
+</tr>
+<tr>
+<td><strong>Discrete logarithm</strong> (finite fields)</td>
+<td>Diffie-Hellman</td>
+<td>Sub-exponential (hard)</td>
+<td>Polynomial — <strong>broken</strong> by Shor</td>
+</tr>
+<tr>
+<td><strong>Elliptic curve discrete log (ECDLP)</strong></td>
+<td>ECDSA, EdDSA, BN254 pairings</td>
+<td>Exponential (very hard)</td>
+<td>Polynomial — <strong>broken</strong> by Shor</td>
+</tr>
+</tbody></table>
+<p>Every blockchain, every TLS connection, every SSH session, every encrypted message relies on at least one of these. All three fall to the same algorithm.</p>
+<h3>Shor's algorithm — what it actually does</h3>
+<p>You studied math, so here's the actual mechanism:</p>
+<p>1. Shor reduces factoring/DLP to <strong>period-finding</strong> in a group</p>
+<p>2. Period-finding is done via the <strong>Quantum Fourier Transform</strong> (QFT), which is efficient on a quantum computer</p>
+<p>3. For an n-bit key, Shor needs roughly 2n+3 logical qubits and O(n^3) gates</p>
+<p>4. For ECDSA-256 (Ethereum): ~500 logical qubits, but each logical qubit requires ~1,000-10,000 physical qubits for error correction</p>
+<p>5. So you need roughly <strong>500K-5M physical qubits</strong> to break Ethereum keys</p>
+<p>Current state of quantum hardware (2026):</p>
+<ul>
+<li>IBM: 1,386 qubits (Flamingo, 2025), roadmap to 100K+ by 2033</li>
+<li>Google: Willow chip (105 qubits, 2024), demonstrated "below threshold" error correction</li>
+<li>Others: IonQ, Quantinuum, PsiQuantum all progressing</li>
+</ul>
+<p><strong>Credible timeline for breaking ECDSA: 2029-2035.</strong> Not certain, but not speculative either. This is a "when" problem, not an "if" problem.</p>
+<h3>Grover's algorithm — the symmetric threat</h3>
+<p>Grover gives a <strong>quadratic speedup</strong> for unstructured search. If a hash function has 2^n possible outputs, Grover finds a preimage in 2^(n/2) time.</p>
+<ul>
+<li>SHA-256: 256-bit → 128-bit post-quantum. Still safe.</li>
+<li>AES-128: 128-bit → 64-bit post-quantum. <strong>Not safe.</strong> Use AES-256.</li>
+<li>Keccak256: 256-bit → 128-bit post-quantum. Still safe.</li>
+</ul>
+<p>This is why ZK-ACE uses keccak256 (256-bit hash) — even with Grover, you get 128-bit security, which is the standard target.</p>
+<h3>The NIST Post-Quantum Standards</h3>
+<p>NIST (U.S. National Institute of Standards and Technology) ran a 7-year competition (2017-2024) to standardize post-quantum algorithms. Winners:</p>
+<p><strong>For digital signatures (replacing ECDSA/RSA):</strong></p>
+<table><thead><tr>
+<th>Standard</th>
+<th>Based on</th>
+<th>Signature size</th>
+<th>Public key</th>
+<th>Speed</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>ML-DSA</strong> (Dilithium)</td>
+<td>Lattices (Module-LWE)</td>
+<td>2.4-4.6 KB</td>
+<td>1.3-2.6 KB</td>
+<td>Fast</td>
+</tr>
+<tr>
+<td><strong>SLH-DSA</strong> (SPHINCS+)</td>
+<td>Hash functions</td>
+<td>7.9-49 KB</td>
+<td>32-64 bytes</td>
+<td>Slow</td>
+</tr>
+<tr>
+<td><strong>FN-DSA</strong> (FALCON)</td>
+<td>Lattices (NTRU)</td>
+<td>0.7-1.3 KB</td>
+<td>0.9-1.8 KB</td>
+<td>Fast, but complex</td>
+</tr>
+</tbody></table>
+<p><strong>For key exchange (replacing Diffie-Hellman):</strong></p>
+<table><thead><tr>
+<th>Standard</th>
+<th>Based on</th>
+<th>Ciphertext</th>
+<th>Public key</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>ML-KEM</strong> (Kyber)</td>
+<td>Lattices (Module-LWE)</td>
+<td>0.8-1.6 KB</td>
+<td>0.8-1.6 KB</td>
+</tr>
+</tbody></table>
+<h3>Why NIST PQ signatures don't solve the blockchain problem</h3>
+<p>The signature sizes tell the story:</p>
+<ul>
+<li>ECDSA signature: <strong>64 bytes</strong></li>
+<li>ML-DSA (Dilithium) signature: <strong>2,420 bytes</strong> (38x larger)</li>
+<li>SLH-DSA (SPHINCS+) signature: <strong>7,856 bytes</strong> (123x larger)</li>
+</ul>
+<p>On Ethereum L1, calldata costs 16 gas per non-zero byte. On L2 rollups, calldata is the dominant cost because it gets posted to L1. A 38x increase in signature data means a 38x increase in the authorization portion of transaction costs.</p>
+<p>This is the gap ZK-ACE fills: instead of a large post-quantum signature, you submit a compact STARK proof (~44 KB) that achieves quantum resistance without the calldata bloat of lattice signatures. And unlike hash-based signatures (SPHINCS+, Lamport), STARKs are stateless — the same key works forever.</p>
+<h3>The "hardness assumptions" hierarchy</h3>
+<p>Different PQ approaches rely on different math:</p>
+<table><thead><tr>
+<th>Approach</th>
+<th>Hardness assumption</th>
+<th>Confidence level</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Hash-based</strong> (STARKs, Lamport, SPHINCS+)</td>
+<td>Hash functions are one-way</td>
+<td><strong>Highest</strong> — studied for 50+ years, no structural weaknesses</td>
+</tr>
+<tr>
+<td><strong>Lattice-based</strong> (Dilithium, FALCON, Kyber)</td>
+<td>Shortest Vector Problem (SVP) in lattices</td>
+<td><strong>High</strong> — studied for 25+ years, but newer than hash-based</td>
+</tr>
+<tr>
+<td><strong>Code-based</strong> (McEliece)</td>
+<td>Decoding random linear codes</td>
+<td><strong>High</strong> — 40+ years, large keys</td>
+</tr>
+<tr>
+<td><strong>Isogeny-based</strong> (SIDH/SIKE)</td>
+<td>Supersingular isogeny walk</td>
+<td><strong>Broken</strong> — SIKE was broken in 2022 by a classical attack</td>
+</tr>
+<tr>
+<td><strong>Multivariate</strong> (Rainbow)</td>
+<td>Solving multivariate quadratic equations</td>
+<td><strong>Broken</strong> — Rainbow was broken in 2022</td>
+</tr>
+</tbody></table>
+<p>ZK-ACE sits in the <strong>hash-based</strong> category — the most conservative, most battle-tested foundation. The only assumption is that keccak256 and Rescue-Prime behave as random oracles.</p>
+<h3>Zero-knowledge proofs — the taxonomy</h3>
+<p>Zero-knowledge proofs come in many flavors. Here's how they relate:</p>
+<pre><code class="lang-">
+Zero-Knowledge Proofs
+├── Interactive (require back-and-forth)
+│   └── Sigma protocols, Schnorr proofs
+│
+└── Non-Interactive (single message)
+    ├── SNARKs (Succinct Non-interactive ARguments of Knowledge)
+    │   ├── Groth16 — tiny proofs (128 bytes), requires trusted setup, uses BN254 pairings
+    │   ├── PLONK — universal setup, medium proofs, uses pairings
+    │   └── ... all rely on elliptic curves → QUANTUM VULNERABLE
+    │
+    ├── STARKs (Scalable Transparent ARguments of Knowledge)
+    │   ├── No trusted setup (transparent)
+    │   ├── Uses only hash functions → QUANTUM SAFE
+    │   ├── Larger proofs than SNARKs (~4-50 KB vs ~128 bytes)
+    │   ├── Verification: O(log^2 n) — very efficient
+    │   └── THIS IS WHAT ZK-ACE USES
+    │
+    └── Bulletproofs
+        ├── No trusted setup
+        ├── Uses discrete log → QUANTUM VULNERABLE
+        └── Short proofs but slow verification
+</code></pre>
+<p>The key insight: <strong>most "ZK" systems in crypto today use SNARKs, which are NOT quantum-safe</strong> because they rely on elliptic curve pairings. When people say "ZK rollup" (like zkSync, Scroll, Polygon zkEVM), they typically mean SNARK-based, not STARK-based. Starknet is the notable exception — they use STARKs.</p>
+<h3>The blockchain quantum threat landscape</h3>
+<p><strong>What's at risk:</strong></p>
+<p>1. <strong>All EOA wallets</strong> — private keys recoverable from public keys via Shor's algorithm</p>
+<p>2. <strong>All smart contract wallets using ECDSA</strong> — same issue</p>
+<p>3. <strong>SNARK-based ZK rollups</strong> — proofs rely on BN254 pairings (elliptic curves)</p>
+<p>4. <strong>Cross-chain bridges</strong> — typically secured by multisigs (ECDSA)</p>
+<p>5. <strong>TLS/HTTPS</strong> — the connections to RPCs use key exchange that's quantum-vulnerable (being migrated to ML-KEM)</p>
+<p><strong>What's NOT at risk:</strong></p>
+<p>1. <strong>Hash-based commitments</strong> — Merkle trees, state roots, etc.</p>
+<p>2. <strong>Symmetric encryption</strong> — AES-256 with 128-bit PQ security</p>
+<p>3. <strong>Proof-of-work</strong> (for chains that use it) — mining uses SHA-256 (symmetric)</p>
+<p>4. <strong>STARK-based proofs</strong> — hash-only, no elliptic curves</p>
+<p><strong>The "harvest now, decrypt later" attack:</strong></p>
+<p>Adversaries (nation-states) are recording encrypted traffic today, planning to decrypt it when quantum computers arrive. For blockchains, this is less relevant because transactions are public — but the ability to derive private keys from public keys (which are visible on-chain after the first transaction) means an attacker with a quantum computer could drain any wallet that has ever transacted.</p>
+<h3>Ethereum's response</h3>
+<p>The Ethereum Foundation formed a Post-Quantum team in January 2026. Their roadmap:</p>
+<p>1. <strong>Short term</strong>: Account abstraction (ERC-4337) as a migration path — let wallets upgrade their signature schemes without changing the protocol</p>
+<p>2. <strong>Medium term</strong>: leanVM/leanSig — new precompiles for efficient PQ signature verification in the EVM</p>
+<p>3. <strong>Long term</strong>: Protocol-level migration away from ECDSA for validator signatures</p>
+<p>ZK-ACE is essentially an implementation of option 1 — using ERC-4337 to replace ECDSA with quantum-safe STARK proofs, without waiting for protocol changes.</p>
+<h3>Where ZK-ACE sits in all of this</h3>
+<pre><code class="lang-">
+The Post-Quantum Blockchain Solution Space
+│
+├── New L1 Chains (QRL, QANplatform, Diamante)
+│   └── Require users to abandon Ethereum ecosystem
+│
+├── NIST Signature Verification on EVM (Dilithium/FALCON in Solidity)
+│   └── Works but: 2-5 KB signatures, 500M+ gas for verification, impractical
+│
+├── Hash-Based Signatures on EVM (Lamport, SPHINCS+)
+│   └── Works but: one-time keys (Lamport), huge signatures, ECDSA fallback needed
+│
+├── Protocol-Level Changes (Ethereum PQ roadmap)
+│   └── Years away (2029+), requires hard fork, consensus across all clients
+│
+└── ZK-ACE: STARK Proofs via Account Abstraction ← YOU ARE HERE
+    ├── Works on existing EVM today (no protocol changes)
+    ├── Compact proofs (44 KB, $0.20/tx)
+    ├── Stateless (no key exhaustion)
+    ├── No trusted setup
+    ├── No ECDSA anywhere
+    └── Deployed and live on Arbitrum One
+</code></pre>
+<hr>
+<h2>Part 1: Why This Exists</h2>
+<h3>The problem in one sentence</h3>
+<p>Every Ethereum wallet uses a digital signature scheme called ECDSA, which relies on the hardness of a math problem (the discrete logarithm on elliptic curves) that quantum computers will be able to solve efficiently.</p>
+<h3>Why that matters</h3>
+<p>Ethereum wallets work like this today:</p>
+<p>1. You have a <strong>private key</strong> (a random 256-bit number)</p>
+<p>2. From it, you derive a <strong>public key</strong> (a point on an elliptic curve)</p>
+<p>3. To authorize a transaction, you produce an <strong>ECDSA signature</strong> using your private key</p>
+<p>4. Anyone can verify the signature using your public key</p>
+<p>The security assumption: given the public key, you can't figure out the private key. This is the <strong>Elliptic Curve Discrete Logarithm Problem (ECDLP)</strong> — hard for classical computers, easy for quantum computers via <strong>Shor's algorithm</strong>.</p>
+<p>Timeline estimates for a quantum computer capable of breaking ECDSA: <strong>2027-2033</strong>. When that happens, every wallet on Ethereum, Bitcoin, Solana — everything using elliptic curves — becomes vulnerable.</p>
+<h3>What ZK-ACE does differently</h3>
+<p>Instead of signing transactions with a private key, you <strong>prove in zero knowledge</strong> that you know a secret, without ever revealing the secret or using any elliptic curve math.</p>
+<p>The proof uses only <strong>hash functions</strong> (specifically keccak256, the same hash built into the Ethereum Virtual Machine). Hash functions are symmetric cryptography — Shor's algorithm doesn't help. Grover's algorithm (the best quantum attack on symmetric crypto) only halves the security: 256-bit becomes 128-bit, which is still unbreakable.</p>
+<hr>
+<h2>Part 2: The Core Idea</h2>
+<h3>Identity, not keys</h3>
+<p>Traditional wallet: <strong>"I have the private key that matches this public key."</strong></p>
+<p>ZK-ACE vault: <strong>"I know a secret that is consistent with a commitment stored on-chain, and here's a mathematical proof of that — without revealing the secret."</strong></p>
+<p>The components:</p>
+<table><thead><tr>
+<th>Concept</th>
+<th>What it is</th>
+<th>Analogy</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>REV</strong> (Root Entropy Value)</td>
+<td>The prover witness derived from your 24-word mnemonic via PBKDF2, then reduced into the Goldilocks field for the STARK circuit.</td>
+<td>The combination to your safe</td>
+</tr>
+<tr>
+<td><strong>IDcom</strong> (Identity Commitment)</td>
+<td>Hash(REV, salt, chainId). Stored on-chain.</td>
+<td>The lock on the safe — everyone can see the lock, but not the combination</td>
+</tr>
+<tr>
+<td><strong>STARK Proof</strong></td>
+<td>A mathematical proof that you know the REV matching the on-chain IDcom.</td>
+<td>Proving you know the combination without opening the safe in front of anyone</td>
+</tr>
+</tbody></table>
+<h3>The hash function: Rescue-Prime</h3>
+<p>To compute IDcom from REV, we use <strong>Rescue-Prime</strong> (Rp64_256), a hash function designed for arithmetic circuits. It operates over the <strong>Goldilocks field</strong> and outputs 4 field elements (256 bits total).</p>
+<pre><code class="lang-">
+IDcom = RescuePrime(REV, salt, chainId)
+     → 4 Goldilocks elements
+     → packed as 32 bytes (bytes32 in Solidity)
+</code></pre>
+<p>Why Rescue-Prime instead of keccak256 for commitments? Because Rescue-Prime is "algebraically friendly" — it's efficient to prove inside a STARK circuit. Keccak256 is used for the Merkle trees and Fiat-Shamir challenges (the outer proof structure), but the identity commitment itself uses Rescue-Prime because that's what gets proven.</p>
+<hr>
+<h2>Part 3: The Goldilocks Field</h2>
+<p>All arithmetic in ZK-ACE happens in the <strong>Goldilocks field</strong>:</p>
+<pre><code class="lang-">
+p = 2^64 - 2^32 + 1 = 18,446,744,069,414,584,321
+</code></pre>
+<p>This is a prime number slightly below 2^64. It's called "Goldilocks" because it sits in a sweet spot:</p>
+<ul>
+<li><strong>Small enough</strong> that two elements can be multiplied without overflow in a 128-bit register (64 × 64 = 128)</li>
+<li><strong>Large enough</strong> for meaningful security when using 4 elements together (4 × 64 = 256 bits)</li>
+<li><strong>Has nice roots of unity</strong> — 2^32 divides (p-1), so there are 2^32-th roots of unity, which makes FFTs (Fast Fourier Transforms) efficient</li>
+</ul>
+<p>The field also has a <strong>quadratic extension</strong>: we adjoin an element t satisfying t^2 - t + 2 = 0, giving us pairs (a, b) representing a + bt. This doubles the security per element and is used throughout the STARK proof.</p>
+<hr>
+<h2>Part 4: STARKs — How the Proof Works</h2>
+<h3>What is a STARK?</h3>
+<p><strong>S</strong>calable <strong>T</strong>ransparent <strong>AR</strong>gument of <strong>K</strong>nowledge.</p>
+<ul>
+<li><strong>Scalable</strong>: Verification time is polylogarithmic in the computation size</li>
+<li><strong>Transparent</strong>: No trusted setup (unlike Groth16/SNARKs which need a toxic-waste ceremony)</li>
+<li><strong>Argument of Knowledge</strong>: Proves you know a witness (the REV) satisfying certain constraints</li>
+</ul>
+<p>STARKs are built on three ideas from math:</p>
+<p>1. <strong>Polynomials</strong> — The witness is encoded as polynomial evaluations</p>
+<p>2. <strong>Reed-Solomon codes</strong> — Low-degree polynomials are extended to a larger domain to enable spot-checking</p>
+<p>3. <strong>Merkle trees</strong> — Commitments to polynomial evaluations via hash-based data structures</p>
+<h3>The AIR (Algebraic Intermediate Representation)</h3>
+<p>The computation we want to prove is encoded as a table (the "execution trace") with constraints:</p>
+<pre><code class="lang-">
+18 columns × 8 rows
+
+Columns 0-3:    IDcom    (4 Goldilocks elements)
+Columns 4-7:    target   (4 Goldilocks elements)
+Columns 8-11:   rpCom    (replay-prevention commitment)
+Column 12:      domain   (chain ID)
+Columns 13-16:  txHash   (4 Goldilocks elements)
+Column 17:      step     (counter: 0, 1, 2, ..., 7)
+</code></pre>
+<p><strong>Transition constraints</strong> (what must be true between consecutive rows):</p>
+<ul>
+<li>Columns 0-16: each value must stay the same (<code>next == current</code>)</li>
+<li>Column 17: counter must increment by 1 (<code>next == current + 1</code>)</li>
+</ul>
+<p><strong>Boundary constraints</strong> (what must be true at specific rows):</p>
+<ul>
+<li>At row 0: all 17 public input values must match the trace</li>
+<li>At row 0: step counter must equal 0</li>
+</ul>
+<p>This seems almost trivially simple — the trace is constant except for a counter. The real cryptographic work happens in <strong>how the trace is constructed</strong> (the prover must know the REV to compute the correct IDcom, target, and rpCom via Rescue-Prime hashing). The constraints guarantee the prover committed to a valid computation.</p>
+<h3>The proof pipeline</h3>
+<p>Here's what happens when you authorize a transaction:</p>
+<pre><code class="lang-">
+1. PROVER (your browser, via WASM)
+   ├── Inputs: REV (secret), salt, chainId, nonce, txHash
+   ├── Compute: IDcom = Rescue(REV, salt, chainId)
+   ├── Compute: derivedKey = Rescue(REV, algId, chainId, index)
+   ├── Compute: target = Rescue(derivedKey)
+   ├── Compute: rpCom = Rescue(IDcom, nonce)
+   ├── Build execution trace (18 × 8 table)
+   ├── Extend trace to LDE domain (18 × 64, blowup factor 8)
+   ├── Commit to trace via Merkle tree (keccak256)
+   ├── Evaluate constraints, commit via Merkle tree
+   ├── DEEP composition (algebraic linking of evaluations)
+   ├── FRI low-degree test
+   ├── Proof-of-Work (20-bit grinding)
+   └── Output: ~44 KB proof + 17 public inputs
+
+2. VERIFIER (Solidity smart contract on Arbitrum)
+   ├── Recompute txHash from calldata (never trust the prover)
+   ├── Check IDcom matches on-chain storage
+   ├── Check domain matches block.chainid
+   ├── Rebuild Fiat-Shamir transcript (derive all challenges)
+   ├── Verify OOD (Out-of-Domain) constraint evaluation
+   ├── Verify Proof-of-Work
+   ├── For each of 44 queries:
+   │   ├── Verify Merkle proofs (trace + constraints)
+   │   ├── Compute DEEP composition
+   │   └── Check against remainder polynomial
+   ├── If all checks pass → valid proof
+   └── Increment zkNonce, return SUCCESS
+</code></pre>
+<h3>Key concepts in the proof</h3>
+<p><strong>Fiat-Shamir transform</strong>: In an interactive proof, the verifier sends random challenges. Fiat-Shamir makes this non-interactive by deriving challenges from a hash of everything seen so far (the "transcript"). The verifier recomputes the same hash, getting the same challenges. This is why the proof is non-interactive — the prover and verifier agree on randomness without communicating.</p>
+<p><strong>Low-Degree Extension (LDE)</strong>: The 8-row trace is interpolated as polynomials and evaluated at 64 points (8× blowup). This redundancy lets the verifier spot-check: if the polynomial is low-degree (consistent with a valid trace), random evaluations will match. If the prover cheated, they'd need to forge a high-degree polynomial that passes random checks — exponentially unlikely.</p>
+<p><strong>DEEP composition</strong>: Instead of checking each column separately, the verifier combines all columns into one "DEEP" polynomial using random coefficients. This reduces 18 separate checks to 1, without losing soundness (by the Schwartz-Zippel lemma — a non-zero polynomial of degree d over a field of size p has at most d/p chance of evaluating to zero at a random point).</p>
+<p><strong>FRI (Fast Reed-Solomon IOP of Proximity)</strong>: Proves that the committed polynomial is actually low-degree. In our case with 0 FRI folding layers, this reduces to checking against a remainder polynomial.</p>
+<p><strong>Proof-of-Work (grinding)</strong>: 20-bit PoW on the Fiat-Shamir transcript. The prover must find a nonce such that keccak256(seed || nonce) has 20 leading zero bits. This adds ~20 bits of security and prevents certain algebraic attacks.</p>
+<hr>
+<h2>Part 5: Security Properties</h2>
+<h3>Where does 128-bit post-quantum security come from?</h3>
+<p>Multiple layers contribute:</p>
+<table><thead><tr>
+<th>Component</th>
+<th>Classical security</th>
+<th>Post-quantum security</th>
+</tr></thead><tbody>
+<tr>
+<td>Rescue-Prime commitments (4 elements)</td>
+<td>256 bits</td>
+<td>128 bits (Grover halves)</td>
+</tr>
+<tr>
+<td>STARK soundness (44 queries, blowup 8)</td>
+<td>132 bits</td>
+<td>132 bits (not affected by quantum)</td>
+</tr>
+<tr>
+<td>Proof-of-Work</td>
+<td>20 bits</td>
+<td>20 bits</td>
+</tr>
+<tr>
+<td>Keccak256 (Merkle trees)</td>
+<td>256 bits</td>
+<td>128 bits (Grover)</td>
+</tr>
+<tr>
+<td>Goldilocks field (per element)</td>
+<td>64 bits</td>
+<td>32 bits (but never used alone)</td>
+</tr>
+</tbody></table>
+<p>The bottleneck is <strong>128-bit post-quantum</strong> from the hash functions — well above the standard 128-bit security target.</p>
+<h3>What exactly is proven?</h3>
+<p>The STARK proof demonstrates:</p>
+<blockquote>"I know values (REV, salt) such that:</blockquote>
+<blockquote>- Rescue(REV, salt, chainId) = the IDcom stored on-chain</blockquote>
+<blockquote>- Rescue(Rescue(REV, algId, chainId, index)) = target</blockquote>
+<blockquote>- Rescue(IDcom, nonce) = rpCom</blockquote>
+<blockquote>- And these values are consistent with the transaction I'm authorizing"</blockquote>
+<p><strong>Without revealing REV or salt.</strong></p>
+<h3>Replay prevention</h3>
+<p>Each transaction uses a monotonically increasing <code>zkNonce</code>. The replay-prevention commitment <code>rpCom = Rescue(IDcom, nonce)</code> is part of the STARK statement, and the contract increments <code>zkNonce</code> after each verifier-accepted proof. In the current implementation, replay resistance is the combination of that proof statement, <code>callData</code> binding, and ERC-4337 nonce behavior rather than a direct on-chain recomputation of <code>rpCom</code>.</p>
+<h3>Cross-chain replay prevention</h3>
+<p>The <code>domain</code> field is set to <code>block.chainid</code> at deployment. A proof generated for Arbitrum (chainId 42161) won't validate on Ethereum mainnet (chainId 1) because the domain check fails.</p>
+<h3>Why the core authorization path avoids ECDSA</h3>
+<p>The entire authorization chain is:</p>
+<pre><code class="lang-">
+BIP-39 mnemonic (24 words, 256-bit entropy)
+  → PBKDF2-HMAC-SHA512 (symmetric KDF, quantum-safe)
+    → REV (identity secret)
+      → Rescue-Prime hash (algebraic hash, quantum-safe)
+        → STARK proof (hash-based proof, quantum-safe)
+          → Keccak256 verification (EVM-native hash, quantum-safe)
+</code></pre>
+<p>Zero elliptic curves. Zero pairings. Nothing for Shor's algorithm to attack.</p>
+<hr>
+<h2>Part 6: The Smart Contract Architecture</h2>
+<h3>ERC-4337 Account Abstraction</h3>
+<p>ZK-ACE uses <strong>ERC-4337</strong>, the Ethereum standard for smart contract wallets. Instead of EOAs (Externally Owned Accounts) that sign with ECDSA, ERC-4337 lets smart contracts define their own validation logic.</p>
+<p>The flow:</p>
+<pre><code class="lang-">
+User (browser)
+  → Builds a UserOperation (like a transaction, but for smart wallets)
+  → Generates STARK proof
+  → Puts proof in the UserOp's "signature" field
+  → Sends to Bundler (Pimlico, Alchemy, etc.)
+    → Bundler submits to EntryPoint contract
+      → EntryPoint calls vault's _validateSignature()
+        → Vault decodes proof + 17 public inputs
+        → Vault recomputes txHash from calldata
+        → Vault checks IDcom, domain
+        → Vault calls StarkVerifier.verifyProof()
+        → If valid → execute the transaction
+</code></pre>
+<h3>The contracts</h3>
+<table><thead><tr>
+<th>Contract</th>
+<th>Address (Arbitrum One)</th>
+<th>Purpose</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>StarkVerifier</strong></td>
+<td><code>0xE1B8750ED6Fd835e7D27a1A4F08532BDbFb9F6d4</code></td>
+<td>Verifies STARK proofs on-chain (~5.6M gas)</td>
+</tr>
+<tr>
+<td><strong>StarkZkAceAccountFactory</strong></td>
+<td><code>0x5c7D026978Fa2D159dCC0Bb87F25DbaBfE872614</code></td>
+<td>CREATE2 factory for deploying user vaults</td>
+</tr>
+<tr>
+<td><strong>StarkZkAceAccount</strong></td>
+<td>(per user)</td>
+<td>Individual vault with IDcom, nonce, pause</td>
+</tr>
+<tr>
+<td><strong>EntryPoint</strong></td>
+<td><code>0x0000000071727De22E5E9d8BAf0edAc6f37da032</code></td>
+<td>Standard ERC-4337 (not ours)</td>
+</tr>
+</tbody></table>
+<h3>What the verifier checks (19 verification steps)</h3>
+<p>1. All 17 public inputs are valid Goldilocks elements (< p)</p>
+<p>2. Trace commitment (Merkle root) extracted from proof</p>
+<p>3. Constraint commitment extracted</p>
+<p>4. FRI commitment extracted</p>
+<p>5. Fiat-Shamir transcript rebuilt from scratch</p>
+<p>6. 36 constraint composition coefficients derived</p>
+<p>7. OOD point z drawn from transcript</p>
+<p>8. OOD digest recomputed and verified</p>
+<p>9. 19 DEEP coefficients derived</p>
+<p>10. 20-bit Proof-of-Work verified</p>
+<p>11. 44 query positions derived from transcript</p>
+<p>12. Query position deduplication enforced</p>
+<p>13. 18 transition constraints evaluated at z</p>
+<p>14. 18 boundary constraints evaluated at z</p>
+<p>15. Constraint composition verified against OOD frame</p>
+<p>16. For each query: Merkle proof verified (trace)</p>
+<p>17. For each query: Merkle proof verified (constraints)</p>
+<p>18. For each query: DEEP composition computed and checked</p>
+<p>19. Remainder polynomial evaluation verified</p>
+<p>All of this happens in Solidity, on-chain, for roughly <strong>$0.20 on Arbitrum at the observed fee levels used for this write-up</strong>.</p>
+<h3>Identity rotation</h3>
+<p>If you suspect your mnemonic is compromised:</p>
+<p>1. Generate a new mnemonic → new REV → new IDcom</p>
+<p>2. Call <code>proposeIdentityRotation(newIdCom)</code> (requires valid proof)</p>
+<p>3. Wait 48 hours (timelock — gives you time to cancel if someone else proposed)</p>
+<p>4. Call <code>confirmIdentityRotation()</code> (requires valid proof)</p>
+<p>The <code>zkNonce</code> is NOT reset during rotation — this prevents replay attacks across identity boundaries.</p>
+<h3>Emergency pause</h3>
+<p><code>setPaused(true)</code> freezes all vault operations. Critically, <code>setPaused</code> bypasses the pause check itself — so you can always unpause by submitting a valid proof, even while paused.</p>
+<hr>
+<h2>Part 7: The Browser Application</h2>
+<h3>Key derivation (how mnemonic becomes a vault)</h3>
+<pre><code class="lang-">
+24-word BIP-39 mnemonic
+  → PBKDF2-HMAC-SHA512(mnemonic, "ZK-ACE-REV-v1", 600,000 iterations)
+  → 64 bytes output
+     → First 8 bytes → REV (reduced to Goldilocks field element)
+     → Next 8 bytes → salt (reduced to Goldilocks field element)
+  → Rescue-Prime(REV, salt, 42161) → IDcom (32 bytes)
+  → Factory.getAddress(IDcom, 0) → vault address (deterministic via CREATE2)
+</code></pre>
+<p>The same mnemonic always produces the same vault address on a given chain. (IDcom includes chainId, so different chains produce different vault addresses from the same mnemonic.) No registration needed — the address exists before deployment.</p>
+<h3>The WASM prover</h3>
+<p>The Winterfell STARK prover (written in Rust) is compiled to WebAssembly (484 KB). It runs entirely in the browser:</p>
+<ul>
+<li><code>compute_id_commitment(rev, salt, domain)</code> — computes Rescue-Prime IDcom</li>
+<li><code>generate_stark_proof(witness_json)</code> — generates full STARK proof (~5-10 seconds)</li>
+<li><code>get_proof_public_inputs(witness_json)</code> — computes public inputs without proving</li>
+</ul>
+<p>No server needed. No API calls for proof generation. The REV never leaves the browser.</p>
+<h3>What the app does</h3>
+<p>1. <strong>Create Vault</strong>: Generate 24-word mnemonic → derive REV → compute IDcom → get deterministic address</p>
+<p>2. <strong>Dashboard</strong>: Fetch ETH + ERC-20 balances from Arbitrum RPC, show USD prices</p>
+<p>3. <strong>Send</strong>: Enter recipient + amount → build calldata → generate STARK proof in browser → submit via bundler</p>
+<p>4. <strong>Receive</strong>: Display vault address for deposits</p>
+<p>5. <strong>Settings</strong>: Emergency pause, identity rotation, export mnemonic</p>
+<hr>
+<h2>Part 8: How ZK-ACE Compares</h2>
+<h3>vs. Normal wallets (MetaMask, etc.)</h3>
+<table><thead><tr>
+<th></th>
+<th>Normal wallet</th>
+<th>ZK-ACE Vault</th>
+</tr></thead><tbody>
+<tr>
+<td>Authorization</td>
+<td>ECDSA signature</td>
+<td>STARK proof</td>
+</tr>
+<tr>
+<td>Quantum-safe?</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Key type</td>
+<td>Private key (256 bits)</td>
+<td>REV (field element)</td>
+</tr>
+<tr>
+<td>Verification cost</td>
+<td>~21,000 gas</td>
+<td>~5,600,000 gas (roughly $0.20 on Arbitrum at sampled fee levels)</td>
+</tr>
+<tr>
+<td>Trusted setup</td>
+<td>N/A</td>
+<td>None needed</td>
+</tr>
+</tbody></table>
+<h3>vs. Anchor Wallet (Lamport signatures)</h3>
+<table><thead><tr>
+<th></th>
+<th>Anchor Wallet</th>
+<th>ZK-ACE Vault</th>
+</tr></thead><tbody>
+<tr>
+<td>PQ scheme</td>
+<td>Lamport one-time signatures</td>
+<td>STARK proofs</td>
+</tr>
+<tr>
+<td>Signature size</td>
+<td>~24 KB</td>
+<td>~44 KB</td>
+</tr>
+<tr>
+<td>Every tx quantum-safe?</td>
+<td>No (ECDSA fallback for daily use)</td>
+<td>Yes, every transaction</td>
+</tr>
+<tr>
+<td>Key reuse</td>
+<td>One-time only (can brick wallet)</td>
+<td>Stateless, unlimited</td>
+</tr>
+<tr>
+<td>Deployed on mainnet?</td>
+<td>Unverified</td>
+<td>Yes (Arbitrum One)</td>
+</tr>
+</tbody></table>
+<h3>vs. New L1 chains (QRL, QANplatform, etc.)</h3>
+<table><thead><tr>
+<th></th>
+<th>New PQ chains</th>
+<th>ZK-ACE Vault</th>
+</tr></thead><tbody>
+<tr>
+<td>Approach</td>
+<td>Build new blockchain</td>
+<td>Smart contract on existing EVM</td>
+</tr>
+<tr>
+<td>Migration</td>
+<td>Users must bridge assets to new chain</td>
+<td>Works on Arbitrum today, with existing assets</td>
+</tr>
+<tr>
+<td>Ecosystem</td>
+<td>New, limited</td>
+<td>Full EVM ecosystem (DeFi, NFTs, etc.)</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Part 9: The Numbers to Know</h2>
+<p>Keep these in your head for any technical conversation:</p>
+<table><thead><tr>
+<th>What</th>
+<th>Value</th>
+<th>Why it matters</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Goldilocks prime</strong></td>
+<td>2^64 - 2^32 + 1</td>
+<td>The field everything operates in</td>
+</tr>
+<tr>
+<td><strong>Trace size</strong></td>
+<td>18 columns × 8 rows</td>
+<td>Compact AIR</td>
+</tr>
+<tr>
+<td><strong>FRI queries</strong></td>
+<td>44</td>
+<td>Gives 132-bit soundness</td>
+</tr>
+<tr>
+<td><strong>Blowup factor</strong></td>
+<td>8</td>
+<td>LDE domain is 64 (8 × 8)</td>
+</tr>
+<tr>
+<td><strong>Grinding bits</strong></td>
+<td>20</td>
+<td>Proof-of-Work for extra security</td>
+</tr>
+<tr>
+<td><strong>Proof size</strong></td>
+<td>~44 KB</td>
+<td>Compact for a transparent proof</td>
+</tr>
+<tr>
+<td><strong>Verification gas</strong></td>
+<td>~5.6M</td>
+<td>Roughly $0.20 on Arbitrum at sampled fee levels</td>
+</tr>
+<tr>
+<td><strong>Security level</strong></td>
+<td>128-bit post-quantum</td>
+<td>Standard target</td>
+</tr>
+<tr>
+<td><strong>Public inputs</strong></td>
+<td>17 Goldilocks elements</td>
+<td>IDcom(4) + target(4) + rpCom(4) + domain(1) + txHash(4)</td>
+</tr>
+<tr>
+<td><strong>WASM prover</strong></td>
+<td>484 KB</td>
+<td>Runs in browser, 5-10 seconds</td>
+</tr>
+<tr>
+<td><strong>Rotation timelock</strong></td>
+<td>48 hours</td>
+<td>Time to cancel malicious rotation</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Part 10: Questions You'll Get Asked (and Answers)</h2>
+<p><strong>Q: "Why not just use NIST post-quantum signatures like Dilithium or FALCON?"</strong></p>
+<p>A: Those signatures are 2-5 KB each. On L2 rollups where calldata costs dominate, that's a 30-40x increase in authorization data cost. STARKs are more efficient because a single compact proof replaces the signature entirely, and the verification uses the EVM's native keccak256 opcode (30 gas).</p>
+<p><strong>Q: "Why Goldilocks field instead of BN254?"</strong></p>
+<p>A: BN254 (used by Groth16/SNARKs) relies on elliptic curve pairings — quantum-vulnerable. Goldilocks is a prime field with no elliptic curve assumptions. It also has efficient 64-bit arithmetic and nice FFT-friendly properties.</p>
+<p><strong>Q: "Why 8 rows? That seems tiny."</strong></p>
+<p>A: The trace length is independent of security. Our AIR is simple (constant columns + counter) because the hard work (Rescue-Prime hashing) happens during trace construction, not in the constraints themselves. The 8-row trace is sufficient to encode all the public inputs we need to verify. Security comes from the number of FRI queries (44) and the blowup factor (8), not the trace length.</p>
+<p><strong>Q: "What if quantum computers break keccak256?"</strong></p>
+<p>A: Keccak256 is a symmetric primitive. The best known quantum attack (Grover) reduces 256-bit security to 128-bit. Breaking 128-bit symmetric crypto would require roughly 2^128 quantum operations — this is not feasible even with theoretical future quantum computers. The cryptographic community consensus is that 128-bit symmetric security is safe post-quantum.</p>
+<p><strong>Q: "Why STARKs over SNARKs?"</strong></p>
+<p>A: SNARKs (like Groth16) require a trusted setup ceremony that produces "toxic waste" — if not properly destroyed, it can be used to forge proofs. STARKs are <strong>transparent</strong>: no trusted setup, no toxic waste, no trust in any third party. Additionally, Groth16 uses BN254 pairings (elliptic curves, quantum-vulnerable). STARKs use only hash functions.</p>
+<p><strong>Q: "How is this different from just running a hash-based signature on Ethereum?"</strong></p>
+<p>A: Hash-based signatures (like Lamport, SPHINCS+) are stateful — each key can only be used once or a limited number of times. ZK-ACE is stateless: the same REV can authorize unlimited transactions. The proof proves knowledge of the REV without consuming it. Additionally, on-chain verification of raw Lamport signatures costs ~24 KB of calldata per transaction. Our STARK proof is ~44 KB.</p>
+<p><strong>Q: "Is the roughly $0.20 cost competitive?"</strong></p>
+<p>A: A normal ECDSA transaction on Arbitrum costs roughly ~$0.01-0.02 at typical fee levels. So ZK-ACE is materially more expensive per transaction. The tradeoff is quantum resistance. For high-value assets (DAO treasuries, large holdings), paying roughly $0.20 for proof-backed authorization can still be a reasonable insurance premium. As L2 fees change, this number moves with them.</p>
+<p><strong>Q: "What happens if I lose my mnemonic?"</strong></p>
+<p>A: Same as any wallet — your funds are lost. The identity rotation feature lets you migrate to a new mnemonic while still in control, but once you lose access entirely, there is no recovery. This is the fundamental tradeoff of self-custody.</p>
+<p><strong>Q: "Could someone front-run the proof generation?"</strong></p>
+<p>A: No. The proof is bound to a specific transaction (txHash is a public input recomputed from calldata on-chain). A proof for one transaction cannot authorize a different transaction. The domain binding (chainId) prevents cross-chain replay, and same-chain replay resistance comes from the combined STARK statement, zkNonce progression, and ERC-4337 nonce behavior.</p>
+<hr>
+<h2>Part 11: The Deployed System</h2>
+<h3>What's live right now</h3>
+<table><thead><tr>
+<th>Component</th>
+<th>Status</th>
+<th>Location</th>
+</tr></thead><tbody>
+<tr>
+<td>StarkVerifier (Solidity)</td>
+<td>Deployed</td>
+<td>Arbitrum One: <code>0xE1B8...f6d4</code></td>
+</tr>
+<tr>
+<td>StarkZkAceAccountFactory</td>
+<td>Deployed</td>
+<td>Arbitrum One: <code>0x5c7D...2614</code></td>
+</tr>
+<tr>
+<td>WASM Prover (browser)</td>
+<td>Live</td>
+<td>zkace-vault.vercel.app</td>
+</tr>
+<tr>
+<td>Vault Web App</td>
+<td>Live</td>
+<td>zkace-vault.vercel.app</td>
+</tr>
+<tr>
+<td>Marketing Website</td>
+<td>Live</td>
+<td>zkace.vercel.app</td>
+</tr>
+<tr>
+<td>Research Paper</td>
+<td>Published</td>
+<td>arXiv:2603.07974v2</td>
+</tr>
+<tr>
+<td>Test Suite</td>
+<td>130 tests passing</td>
+<td>Rust (43) + Solidity (87)</td>
+</tr>
+</tbody></table>
+<h3>Confirmed end-to-end transaction</h3>
+<p>A real quantum-resistant transaction has been executed on Arbitrum One mainnet:</p>
+<ul>
+<li><strong>Transaction:</strong> <a href="https://arbiscan.io/tx/0x275451c9160e2f7fe72f6652e352bdd1e47e0853514a8278f7fefbe3e35e4491">0x275451c9...e4491</a></li>
+<li><strong>Gas used:</strong> 5,260,902 (STARK verification)</li>
+<li><strong>Flow:</strong> WASM proof generation → Pimlico bundler → EntryPoint → StarkZkAceAccount → StarkVerifier → execute</li>
+<li><strong>zkNonce:</strong> 0 → 1 (replay prevention confirmed)</li>
+<li><strong>No ECDSA signature anywhere in the transaction</strong></li>
+</ul>
+<h3>What's needed for production readiness</h3>
+<p>1. <strong>Professional security audit</strong> — for institutional confidence (Arbitrum's audit subsidy can cover this)</p>
+<p>2. <strong>Multi-sig threshold vault</strong> — N-of-M STARK proofs for institutional custody</p>
+<p>3. <strong>Multi-chain deployment</strong> — Base, Optimism, Polygon (same contracts, different RPCs)</p>
+<hr>
+<h2>Part 12: The Ethereum Foundation PQ Ecosystem</h2>
+<p><em>Everything you need to know to have an informed conversation with the EF PQ team.</em></p>
+<h3>The org structure</h3>
+<p>The EF Protocol Cluster is where PQ research lives. Key people:</p>
+<table><thead><tr>
+<th>Person</th>
+<th>Role</th>
+<th>What they care about</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Justin Drake</strong></td>
+<td>EF Researcher</td>
+<td>Architect of "Lean Ethereum" / BeamChain vision. Proposed leanVM. Thinks in 10-year protocol timescales.</td>
+</tr>
+<tr>
+<td><strong>Will Corcoran</strong></td>
+<td>PQ Research Coordinator</td>
+<td>Your first point of contact (will@ethereum.org). Handles institutional inbound. Coordinates the PQ effort across teams.</td>
+</tr>
+<tr>
+<td><strong>Alex Hicks</strong></td>
+<td>Protocol Snarkification Lead</td>
+<td>Leads the $20M zkEVM Formal Verification initiative. Cares about mathematical correctness.</td>
+</tr>
+<tr>
+<td><strong>Tamach Horbacher</strong></td>
+<td>PQ Team Lead</td>
+<td>Writes the PQ blog posts. Technical lead on the PQ roadmap.</td>
+</tr>
+</tbody></table>
+<h3>The three-layer PQ roadmap</h3>
+<p>The EF thinks about PQ in three layers, each with different solutions:</p>
+<p><strong>Consensus Layer (validator signatures):</strong></p>
+<ul>
+<li>Current: BLS signatures (96 bytes, aggregate to 96 bytes for 10,000 validators)</li>
+<li>Problem: BLS uses elliptic curve pairings → broken by Shor</li>
+<li>Solution: <strong>leanXMSS</strong> (hash-based signatures, ~3,000 bytes each)</li>
+<li>Aggregation: <strong>leanMultisig</strong> (a minimal zkVM that proves "I verified N valid signatures" in a single STARK proof)</li>
+<li>Result: 10,000 signatures → 125 KB (250x compression)</li>
+<li>Status: 4 devnets shipped, 10 client teams building, targeting L/M fork (~2029)</li>
+</ul>
+<p><strong>Execution Layer (user wallets):</strong></p>
+<ul>
+<li>Current: ECDSA (secp256k1, 64-byte signatures)</li>
+<li>Problem: ECDSA → broken by Shor</li>
+<li>Solution: <strong>Account abstraction</strong> (ERC-4337) to let wallets choose their own signature verification</li>
+<li>Future: <strong>PQ signature precompiles</strong> (native EVM opcodes for ML-DSA/Falcon/SPHINCS+ verification)</li>
+<li>Status: Account abstraction is live. Precompiles are milestone J* on the roadmap (~2029).</li>
+<li><strong>ZK-ACE sits here</strong> — we're the only deployed implementation of the AA-based PQ migration path.</li>
+</ul>
+<p><strong>Data Layer (blob proofs):</strong></p>
+<ul>
+<li>Current: KZG commitments (elliptic curve based)</li>
+<li>Problem: KZG → broken by Shor</li>
+<li>Solution: Replace with PQ-safe commitment scheme</li>
+<li>Status: Research phase, targeting M* fork</li>
+</ul>
+<h3>leanSig vs ZK-ACE — different problems, different layers</h3>
+<p>This is the most important distinction to understand:</p>
+<table><thead><tr>
+<th></th>
+<th>leanSig (EF)</th>
+<th>ZK-ACE (us)</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Layer</strong></td>
+<td>Consensus (validators)</td>
+<td>Execution (user wallets)</td>
+</tr>
+<tr>
+<td><strong>What it replaces</strong></td>
+<td>BLS validator signatures</td>
+<td>ECDSA wallet signatures</td>
+</tr>
+<tr>
+<td><strong>Signature scheme</strong></td>
+<td>XMSS (hash-based, stateful)</td>
+<td>STARK proofs (hash-based, stateless)</td>
+</tr>
+<tr>
+<td><strong>Aggregation</strong></td>
+<td>leanMultisig (zkVM)</td>
+<td>Not needed (one proof per tx)</td>
+</tr>
+<tr>
+<td><strong>Who uses it</strong></td>
+<td>Validator node operators (~1M)</td>
+<td>End users (everyone)</td>
+</tr>
+<tr>
+<td><strong>Deployed?</strong></td>
+<td>Devnet</td>
+<td><strong>Mainnet</strong></td>
+</tr>
+<tr>
+<td><strong>Compete?</strong></td>
+<td><strong>No — different layers entirely</strong></td>
+<td></td>
+</tr>
+</tbody></table>
+<p><strong>The key talking point:</strong> "leanSig secures Ethereum's consensus. ZK-ACE secures Ethereum's users. Both are needed. They don't overlap."</p>
+<h3>The leanVM zkVM</h3>
+<p>leanVM is a purpose-built minimal zkVM for aggregating hash-based signatures:</p>
+<ul>
+<li><strong>4 opcodes</strong> (extremely minimal — Cairo has hundreds)</li>
+<li>Built on <strong>Plonky3</strong> (newer STARK framework by Polygon) and <strong>WHIR</strong> (efficient polynomial commitment)</li>
+<li>Uses <strong>multilinear STARKs</strong> and <strong>logup lookups</strong></li>
+<li>Current recursion time: 2.7 seconds, targeting 0.27 seconds</li>
+<li>Purpose: aggregate thousands of leanXMSS signatures into one proof per slot</li>
+</ul>
+<p>This is NOT a general-purpose zkVM. It does one thing: aggregate signatures. It's not a competitor to ZK-ACE — it operates at a completely different level (consensus infrastructure vs. user wallet).</p>
+<h3>The precompile timeline and what it means for us</h3>
+<p>The EF plans PQ signature precompiles (milestone J*) around 2029. When those ship:</p>
+<ul>
+<li>On-chain verification of ML-DSA/Falcon will cost ~100-200K gas (cheap) instead of ~500M gas (current Solidity)</li>
+<li>Direct PQ signatures become viable for user wallets</li>
+<li>Our Solidity STARK verifier (5.6M gas) becomes comparatively expensive</li>
+</ul>
+<p><strong>This is a real constraint on long-term value.</strong> But:</p>
+<p>1. 2029 is 3 years away — that's our window</p>
+<p>2. Account abstraction means the transition is seamless — same wallet, same address, swap the verifier</p>
+<p>3. Until precompiles ship, we're the only option that works today</p>
+<p>4. The benchmark data we produce (EF grant deliverable) helps the EF design better precompiles</p>
+<h3>The $20M formal verification initiative</h3>
+<p>The EF is spending $20M on formally verifying cryptographic components. This matters because:</p>
+<ul>
+<li>It sets a quality bar for the ecosystem</li>
+<li>Projects that contribute to formal verification get credibility</li>
+<li>Our Halmos symbolic verification work (EF grant deliverable) aligns with this initiative</li>
+<li>A formally verified Goldilocks field library is useful beyond ZK-ACE — it's a public good</li>
+</ul>
+<h3>What the EF is NOT building</h3>
+<p>Critically, the EF does <strong>coordination, not implementation.</strong> From Will's presentation: "All implementation is done by teams outside the EF." They write specs, fund research, and coordinate. They are NOT building:</p>
+<ul>
+<li>A consumer PQ wallet app</li>
+<li>A PQ wallet SDK</li>
+<li>A PQ hardware wallet integration</li>
+<li>DAO onboarding tools</li>
+<li>Any user-facing product</li>
+</ul>
+<p>All of that is left to the ecosystem. We are the ecosystem doing it.</p>
+<hr>
+<h2>Part 13: The Competitive Landscape</h2>
+<h3>Deployed competitors (or lack thereof)</h3>
+<table><thead><tr>
+<th>Project</th>
+<th>What they claim</th>
+<th>Reality</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Anchor Wallet (Pauli Group)</strong></td>
+<td>"First quantum-proof smart contract wallet"</td>
+<td>Lamport sigs + ERC-4337. Falls back to ECDSA for daily use. 1 Chrome extension rating. No verified mainnet deployment.</td>
+</tr>
+<tr>
+<td><strong>QSafe Wallet (Quranium)</strong></td>
+<td>"Quantum-secure multi-chain wallet"</td>
+<td>PQ crypto is local only — on-chain still uses ECDSA. Not truly PQ end-to-end.</td>
+</tr>
+<tr>
+<td><strong>PQ Wallet (Tectonic Labs)</strong></td>
+<td>"Post-quantum EVM wallet"</td>
+<td>Announced Feb 2026. "Early access sign-ups." Not deployed.</td>
+</tr>
+<tr>
+<td><strong>ZKNOX</strong></td>
+<td>"PQ hardware wallet transaction on Ethereum"</td>
+<td>EF-backed research demo. Not a product. Proposed EIP-7885 for lattice precompiles.</td>
+</tr>
+<tr>
+<td><strong>ZK-ACE</strong></td>
+<td>"Only deployed PQ wallet on EVM"</td>
+<td><strong>Deployed. Mainnet transactions confirmed. STARK proofs verified on-chain.</strong></td>
+</tr>
+</tbody></table>
+<h3>Anchor Wallet deep dive (your closest competitor)</h3>
+<p>Pauli Group is run by Pierre-Luc Dallaire-Demers, a real quantum physicist (PhD, Harvard postdoc, Xanadu, Zapata AI). Their approach:</p>
+<ul>
+<li><strong>Lamport one-time signatures</strong> verified in Solidity (256 keccak256 hashes per verification)</li>
+<li>Keys are <strong>one-time use</strong> — each key can only sign once, then it's burned</li>
+<li>They mitigate this by <strong>falling back to ECDSA for daily transactions</strong> — the quantum-resistant Lamport path is reserved for key rotation and high-value operations</li>
+<li><strong>24 KB calldata per Lamport signature</strong> (vs. our 44 KB STARK proof)</li>
+<li><strong>$30-45 per Lamport tx on mainnet</strong> (vs. our roughly $0.20 on Arbitrum at sampled fee levels)</li>
+<li>No verified mainnet deployment. ~0 evident users.</li>
+</ul>
+<p><strong>The one-liner:</strong> "Anchor Wallet uses ECDSA for daily transactions. Our core authorization path does not."</p>
+<h3>New L1 chains (not real competitors)</h3>
+<p>QRL, QANplatform, Diamante, Quranium — all building their own blockchains. They require users to abandon the Ethereum ecosystem. None have meaningful adoption. The DeFi, NFTs, and stablecoins are on Ethereum. A new L1 doesn't solve anything for existing Ethereum users.</p>
+<h3>The real future competitors</h3>
+<p>The actual threat isn't other PQ wallets — it's the EF precompiles making direct NIST signatures cheap enough that everyone just uses ML-DSA natively. When that happens (~2029), you don't need a STARK verifier — you just verify Dilithium in a precompile at 100K gas. But that's 3 years away, and account abstraction means ZK-ACE wallets can seamlessly upgrade to use those precompiles when they arrive.</p>
+<hr>
+<h2>Part 14: Bitcoin's Quantum Problem</h2>
+<p><em>Useful context for broader conversations about PQ crypto.</em></p>
+<h3>Why Bitcoin is harder than Ethereum</h3>
+<p>Bitcoin has no smart contracts, no account abstraction, no way to add custom signature verification without a protocol-level soft fork. Every solution requires consensus changes that take 5-10 years (based on SegWit and Taproot precedent).</p>
+<h3>What's vulnerable</h3>
+<ul>
+<li><strong>~1.7M BTC</strong> in P2PK addresses (public key fully exposed, including Satoshi's ~1.1M BTC)</li>
+<li><strong>~5.2M BTC</strong> in reused addresses</li>
+<li><strong>~35% of total Bitcoin supply</strong> is at risk</li>
+<li>Google's March 2026 research: real-time attacks could hijack in-flight transactions in ~9 minutes</li>
+</ul>
+<h3>BIP-360 (the leading Bitcoin proposal)</h3>
+<ul>
+<li>New output type: P2MR (Pay-to-Merkle-Root), SegWit v2, addresses start with <code>bc1z</code></li>
+<li>Supports ML-DSA, SPHINCS+, Falcon signatures</li>
+<li>BTQ Technologies has a working testnet (50+ miners, 200K+ blocks)</li>
+<li>Estimated 5-10 years for full activation</li>
+</ul>
+<h3>The signature size problem for Bitcoin</h3>
+<table><thead><tr>
+<th>Scheme</th>
+<th>Signature</th>
+<th>Txs per block</th>
+</tr></thead><tbody>
+<tr>
+<td>Schnorr (current)</td>
+<td>64 bytes</td>
+<td>~10,000+</td>
+</tr>
+<tr>
+<td>ML-DSA-44</td>
+<td>~3,227 bytes</td>
+<td>~1,000</td>
+</tr>
+<tr>
+<td>SPHINCS+-128s</td>
+<td>~7,856 bytes</td>
+<td>~490</td>
+</tr>
+</tbody></table>
+<p>PQ signatures would crush Bitcoin's throughput. The only solution: STARK-based signature aggregation (StarkWare's S2morrow project) — batch all PQ signatures in a block into one STARK proof. This requires OP_CAT activation (its own soft fork battle).</p>
+<h3>Why this matters for your conversations</h3>
+<p>When people ask "what about Bitcoin?" your answer is: "Bitcoin needs protocol-level changes that will take 5-10 years. Ethereum's account abstraction lets us solve it today at the wallet level, without waiting for protocol upgrades. That's the advantage of the EVM."</p>
+<hr>
+<h2>Part 15: Key Organizations and People to Know</h2>
+<h3>People you might talk to</h3>
+<table><thead><tr>
+<th>Person</th>
+<th>Org</th>
+<th>Why they matter</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Will Corcoran</strong></td>
+<td>EF</td>
+<td>PQ coordinator. Your first EF contact. will@ethereum.org</td>
+</tr>
+<tr>
+<td><strong>Justin Drake</strong></td>
+<td>EF</td>
+<td>Architect of Lean Ethereum. Protocol-level thinker.</td>
+</tr>
+<tr>
+<td><strong>Michael Shaulov</strong></td>
+<td>Fireblocks CEO</td>
+<td>Top acquisition target. Personally champions deals.</td>
+</tr>
+<tr>
+<td><strong>Michael Louzado</strong></td>
+<td>Ledger VP M&A</td>
+<td>Ex-Visa European M&A. The deal person at Ledger.</td>
+</tr>
+<tr>
+<td><strong>Lukas Schor</strong></td>
+<td>Safe co-founder</td>
+<td>Strategy lead at the #1 smart wallet platform.</td>
+</tr>
+<tr>
+<td><strong>Eli Ben-Sasson</strong></td>
+<td>StarkWare CEO</td>
+<td>Invented STARKs. Won't acquire you but validates the tech.</td>
+</tr>
+<tr>
+<td><strong>Scott Aaronson</strong></td>
+<td>StarkWare advisor</td>
+<td>World's leading quantum complexity theorist. Joined Feb 2026.</td>
+</tr>
+<tr>
+<td><strong>Hunter Beast</strong></td>
+<td>BIP-360 author</td>
+<td>Leading Bitcoin PQ proposal. Co-authored with StarkWare.</td>
+</tr>
+<tr>
+<td><strong>Pierre-Luc Dallaire-Demers</strong></td>
+<td>Pauli Group</td>
+<td>Closest competitor. Real quantum physicist. Anchor Wallet creator.</td>
+</tr>
+<tr>
+<td><strong>Yehuda Lindell</strong></td>
+<td>Coinbase Head of Crypto</td>
+<td>Leads their quantum advisory board. Technical champion.</td>
+</tr>
+</tbody></table>
+<h3>Organizations and their PQ stance</h3>
+<table><thead><tr>
+<th>Org</th>
+<th>Stance</th>
+<th>What they've done</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Ethereum Foundation</strong></td>
+<td>Most advanced. $25M invested. 10 client teams.</td>
+<td>leanSig, leanVM, leanSpec, 4 devnets</td>
+</tr>
+<tr>
+<td><strong>StarkWare</strong></td>
+<td>STARKs are inherently PQ.</td>
+<td>Scott Aaronson hired. Co-authored BIP-360. S2morrow for Bitcoin.</td>
+</tr>
+<tr>
+<td><strong>Fireblocks</strong></td>
+<td>Actively researching.</td>
+<td>PQC team mapping ML-DSA, SLH-DSA compatibility with MPC.</td>
+</tr>
+<tr>
+<td><strong>Ledger</strong></td>
+<td>"Quantum-ready" branding.</td>
+<td>Donjon researching ML-DSA on secure elements. Pre-IPO at $4B.</td>
+</tr>
+<tr>
+<td><strong>Trezor</strong></td>
+<td>Most aggressive branding.</td>
+<td>Safe 7 uses SLH-DSA-128 for secure boot. No on-chain PQ.</td>
+</tr>
+<tr>
+<td><strong>Coinbase</strong></td>
+<td>Advisory board formed Jan 2026.</td>
+<td>Stanford/Harvard experts. CEO downplays immediate threat.</td>
+</tr>
+<tr>
+<td><strong>Google</strong></td>
+<td>Driving the timeline.</td>
+<td>March 2026: ECDSA breakable with <500K physical qubits. Internal 2029 migration deadline.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Part 16: Conversation Playbook</h2>
+<p><em>Specific scenarios you'll encounter and exactly what to say.</em></p>
+<h3>Scenario: EF Office Hours (Will Corcoran or PQ team)</h3>
+<p><strong>They'll say:</strong> "How does this relate to the leanSig effort?"</p>
+<p><strong>You say:</strong> "leanSig and leanMultisig solve the consensus layer — replacing BLS for validators. ZK-ACE solves the execution layer — replacing ECDSA for user wallets via account abstraction. These are complementary, not competing. Until PQ signature precompiles ship in the L/M fork, account abstraction is the only path for PQ user wallets. We're the only deployed implementation of that path. We want to help the EF answer institutional questions about what's available today."</p>
+<h3>Scenario: Fireblocks / institutional custody meeting</h3>
+<p><strong>They'll say:</strong> "Our clients use multi-sig. Does this support that?"</p>
+<p><strong>You say:</strong> "Not yet in the current deployment, but the architecture supports it directly. A threshold vault would require N-of-M independent STARK proofs from N different identity holders. Each approver has their own REV, their own IDcom on-chain. The contract verifies N separate proofs before executing. We're building this as the next milestone — it's the natural extension of the single-signer vault to institutional custody."</p>
+<h3>Scenario: "Why not just wait for EF precompiles?"</h3>
+<p><strong>You say:</strong> "The precompiles are targeting 2029. Google's internal deadline for PQ migration is also 2029. That's a 3-year window where high-value Ethereum assets have zero quantum protection — unless they use account abstraction with a PQ verifier, which is what we've built. When precompiles arrive, ZK-ACE wallets upgrade seamlessly — same address, same identity, just a cheaper verification backend. We're the bridge, and bridges are valuable when the tunnel is 3 years away."</p>
+<h3>Scenario: "The code is open source. What are we buying?"</h3>
+<p><strong>You say:</strong> "You're buying 6 months of head start — deployed contracts, a working prover, a confirmed mainnet transaction, and a team that understands the system deeply enough to integrate it into your product. Your engineers would need 12-18 months and $500K to replicate this. I'm offering integration-ready infrastructure today. The grant backing from the EF and Arbitrum Foundation validates the approach. The professional audit validates the code."</p>
+<h3>Scenario: "What if Shor's algorithm takes until 2035?"</h3>
+<p><strong>You say:</strong> "Then every dollar spent on PQ today was insurance that didn't pay out — like fire insurance on a house that didn't burn. But the cost of being wrong is catastrophic: $100B+ in Ethereum assets become vulnerable overnight, with no migration path ready. The EF is spending $25M on this. Google set an internal 2029 deadline. NIST has a 2030 deprecation timeline. The question isn't whether to prepare — it's whether to prepare now or scramble later. We'd rather be 3 years early than 3 minutes late."</p>
+<h3>Scenario: "Is your approach better than NIST signatures?"</h3>
+<p><strong>You say:</strong> "They solve different problems. NIST signatures (ML-DSA, Falcon) are general-purpose — they replace ECDSA directly. But they're 30-50x larger than ECDSA, which makes them expensive on L2 rollups where calldata dominates costs. STARKs offer a different tradeoff: the proof is compact (44 KB vs 24 KB for Lamport), stateless (no one-time key limitation), and uses only hash functions (the most conservative PQ assumption). The EF is pursuing both — NIST precompiles for direct verification, account abstraction for STARK-based verification. We think both will coexist."</p>
+<h3>Scenario: Someone mentions Rescue-Prime isn't NIST-standardized</h3>
+<p><strong>You say:</strong> "Correct — Rescue-Prime is not a NIST standard. It's an algebraically-friendly hash function designed for efficient proving in STARK circuits. It's used only for the identity commitment computation inside the proof. The external cryptography — Merkle trees, Fiat-Shamir challenges, proof-of-work — all use Keccak256, which is the NIST SHA-3 standard. The security of the system doesn't depend on Rescue-Prime being a standard — it depends on it being a secure hash function, which it is (no known attacks, used across multiple STARK deployments including StarkWare's production systems)."</p>
+<h3>Scenario: "How many users do you have?"</h3>
+<p><strong>You say honestly:</strong> "We just deployed. We have confirmed mainnet transactions and the infrastructure is live. We're currently focused on institutional adoption — onboarding DAO treasuries as the first users — rather than retail growth. Quantum resistance is a security feature for high-value assets, not a consumer product. The first users will be treasuries and custody providers who are under pressure from boards and regulators to show quantum readiness."</p></body></html>

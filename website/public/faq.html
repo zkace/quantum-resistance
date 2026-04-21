@@ -1,0 +1,164 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>ZK-ACE FAQ</title><style>:root{--bg:#08080E;--surface:#0F0F18;--amber:#F0A830;--text:#ECEEF4;--text2:#A0A4B8;--border:rgba(255,255,255,0.06);--green:#3DDC84}*{margin:0;padding:0;box-sizing:border-box}html{background:var(--bg);color:var(--text);font-family:"Outfit",system-ui,sans-serif;font-size:15px;line-height:1.7}body{max-width:780px;margin:0 auto;padding:40px 24px 80px}::selection{background:var(--amber);color:var(--bg)}h1{font-family:"Fraunces",Georgia,serif;font-size:2.2rem;font-weight:700;margin:48px 0 8px}h2{font-family:"Fraunces",Georgia,serif;font-size:1.6rem;font-weight:600;margin:48px 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border)}h3{font-size:1.15rem;font-weight:600;margin:28px 0 8px;color:var(--amber)}h4{font-size:1rem;font-weight:600;margin:24px 0 6px}p{margin:8px 0 16px;color:var(--text2)}strong{color:var(--text)}em{color:var(--amber)}a{color:var(--amber);text-decoration:none}a:hover{text-decoration:underline}hr{border:none;border-top:1px solid var(--border);margin:32px 0}code{font-family:"JetBrains Mono",monospace;font-size:0.85em;background:var(--surface);padding:2px 6px;border-radius:4px;color:var(--green)}pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;overflow-x:auto;margin:12px 0 20px}pre code{background:none;padding:0;font-size:0.82rem;color:var(--text2)}table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:0.88rem}th{text-align:left;padding:10px 12px;background:var(--surface);border:1px solid var(--border);color:var(--amber);font-weight:600;font-size:0.78rem;text-transform:uppercase}td{padding:10px 12px;border:1px solid var(--border);color:var(--text2)}ul{margin:8px 0 16px;padding-left:24px}li{margin:4px 0;color:var(--text2)}blockquote{border-left:3px solid var(--amber);padding:8px 16px;margin:12px 0 20px;background:var(--surface);border-radius:0 8px 8px 0;color:var(--text2)}@media(max-width:600px){body{padding:20px 16px 60px}h1{font-size:1.6rem}h2{font-size:1.3rem}h3{font-size:1.05rem}table{font-size:0.78rem}th,td{padding:6px 8px}}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"></head><body><h1>ZK-ACE: Frequently Asked Questions</h1>
+<hr>
+<h2>What ZK-ACE protects and what it doesn't</h2>
+<h3>What exactly does ZK-ACE protect against?</h3>
+<p>ZK-ACE protects the <strong>authorization step</strong> — proving you own a wallet and approving a transaction. In a normal Ethereum wallet, this is done by an ECDSA signature, which a quantum computer can forge by deriving your private key from your public key. ZK-ACE replaces that ECDSA signature with a STARK proof that uses only hash functions. A quantum computer cannot forge this proof.</p>
+<p>Concretely: if a quantum computer exists tomorrow, an attacker could drain every MetaMask wallet that has ever sent a transaction (because the public key is exposed on-chain). They could NOT drain a ZK-ACE vault, because there is no public key to attack — only a hash commitment that reveals nothing useful to Shor's algorithm.</p>
+<h3>What does ZK-ACE NOT protect against?</h3>
+<p>ZK-ACE does not protect against quantum threats at the <strong>protocol level</strong>. Specifically:</p>
+<ul>
+<li><strong>Ethereum's consensus layer</strong> still uses BLS signatures for validator attestations. If quantum computers break BLS, the Ethereum network itself could be disrupted (faked blocks, censorship). This is an Ethereum-wide problem, not specific to ZK-ACE, and is being addressed by the EF's leanSig initiative (targeting ~2029).</li>
+<li><strong>L2 sequencers and bridges</strong> may use ECDSA or other quantum-vulnerable keys for their own operations. If the Arbitrum sequencer's key is compromised by a quantum computer, it could reorder or censor transactions — but it could not steal funds from a ZK-ACE vault.</li>
+<li><strong>RPC connections</strong> between your browser and the Arbitrum/Base node use TLS, which currently relies on quantum-vulnerable key exchange (ECDHE). An attacker with a quantum computer could potentially intercept your connection and see your transaction data (amounts, recipients). They could NOT steal your identity secret (REV), because the REV is never transmitted — only the zero-knowledge proof is sent. The industry is migrating TLS to post-quantum key exchange (ML-KEM), and this is independent of ZK-ACE.</li>
+<li><strong>Smart contracts you interact with</strong> (DeFi protocols, NFT markets, etc.) have their own security assumptions. If you send funds from your quantum-safe ZK-ACE vault to a DeFi protocol secured by an ECDSA admin key, those funds are only as safe as that protocol's key management.</li>
+</ul>
+<h3>So what's the actual benefit if Ethereum itself isn't quantum-safe yet?</h3>
+<p>Think of it like a fireproof safe in a wooden house. The house might burn down (protocol-level quantum attack), but your safe is the last thing standing. More practically:</p>
+<p>1. <strong>Your wallet authorization is quantum-proof today.</strong> Nobody can forge a transaction from your vault using a quantum computer. This is the most likely attack vector — stealing funds by forging signatures — and it's fully addressed.</p>
+<p>2. <strong>Protocol-level attacks are much harder and less profitable.</strong> Breaking BLS consensus requires sustained quantum computation against a distributed system, not a one-shot theft. An attacker with early quantum capabilities would target the easiest, highest-value targets first: individual wallets with exposed public keys and large balances. ZK-ACE removes your wallet from that target list.</p>
+<p>3. <strong>The protocol will catch up.</strong> Ethereum's PQ roadmap targets 2029 for consensus-layer quantum resistance. ZK-ACE provides wallet-level protection during the 3+ year gap. When the protocol upgrades, ZK-ACE vaults will be on a fully quantum-resistant stack end-to-end.</p>
+<p>4. <strong>Account abstraction makes the transition seamless.</strong> When Ethereum adds PQ signature precompiles, ZK-ACE wallets can upgrade their verification backend without changing the user's address or moving any funds. The vault is future-proof by design.</p>
+<hr>
+<h2>For investors</h2>
+<h3>Is ZK-ACE the only quantum-resistant wallet on Ethereum?</h3>
+<p>It is the only wallet that verifies post-quantum proofs on-chain on a live EVM mainnet (Arbitrum One and Base) with confirmed transactions. One other project, Anchor Wallet by Pauli Group, uses Lamport signatures with ERC-4337, but falls back to ECDSA for daily transactions and has no verified mainnet deployment.</p>
+<h3>Why can't incumbents (MetaMask, Ledger, Safe) just add quantum resistance themselves?</h3>
+<p>They can, and eventually will. The question is how long it takes:</p>
+<ul>
+<li><strong>MetaMask/Ledger</strong> are consumer products focused on UX, not cryptographic R&D. Adding STARK verification requires building a custom Solidity verifier (600+ lines of cryptographic code), a WASM prover, and a new key management flow. Estimated: 12-18 months for a team that hasn't done it before.</li>
+<li><strong>Safe</strong> has strong smart contract engineers but no ZK/STARK expertise. Estimated: 9-15 months.</li>
+<li><strong>Fireblocks</strong> has an MPC architecture fundamentally different from STARK-based authorization. Integration requires a paradigm shift, not just a feature addition. Estimated: 12-18 months.</li>
+</ul>
+<p>ZK-ACE has a working deployment today. The head start is real but time-limited — hence the urgency.</p>
+<h3>What's the revenue model?</h3>
+<p>There is no on-chain fee. The current monetization paths are:</p>
+<ul>
+<li><strong>Grants</strong> ($300-500K potential from EF, Arbitrum, Starknet, Base, Optimism, Gitcoin)</li>
+<li><strong>Acquisition</strong> by a wallet, custody, or security company</li>
+<li><strong>Consulting/licensing</strong> for enterprises wanting PQ wallet infrastructure</li>
+<li><strong>Managed custody service</strong> (future) for DAO treasuries</li>
+</ul>
+<h3>What happens when Ethereum adds PQ precompiles (~2029)?</h3>
+<p>On-chain verification of NIST PQ signatures (ML-DSA, Falcon) becomes cheap via native EVM opcodes. At that point, the Solidity STARK verifier becomes a more expensive alternative to precompile-based verification. However:</p>
+<ul>
+<li>ZK-ACE wallets transition seamlessly. The ERC-4337 smart wallet swaps its verification call from the Solidity verifier to the precompile. Same address, same identity, same funds. No migration.</li>
+<li>The 3-year window (2026-2029) is when the technology has its highest standalone value.</li>
+<li>The architecture (identity commitments, replay prevention, identity rotation, emergency pause) survives the precompile transition — it's the wallet infrastructure, not just the verifier.</li>
+</ul>
+<h3>How big is the market?</h3>
+<p>Total value secured by EVM wallets: hundreds of billions of dollars. The addressable market for quantum-resistant custody is primarily:</p>
+<ul>
+<li><strong>DAO treasuries</strong> under governance pressure to demonstrate security readiness</li>
+<li><strong>Institutional custody providers</strong> facing regulatory scrutiny</li>
+<li><strong>High-net-worth individuals</strong> with concentrated holdings</li>
+<li><strong>Bridges and cross-chain infrastructure</strong> securing locked assets</li>
+</ul>
+<p>The quantum computing market itself is projected at $65B+ by 2030, with post-quantum cryptography migration as a major spending category.</p>
+<hr>
+<h2>For users</h2>
+<h3>How do I create a vault?</h3>
+<p>Go to zkace-vault.vercel.app. Click "Create New Vault." Write down the 24-word recovery phrase. That's it. Your vault address is deterministic — it exists on Arbitrum and Base before you even deploy the contract.</p>
+<h3>Is my recovery phrase a "seed phrase" like MetaMask?</h3>
+<p>Yes, it's a standard BIP-39 24-word mnemonic. The difference is what happens after: MetaMask derives an ECDSA private key (quantum-vulnerable). ZK-ACE derives a Goldilocks field element via PBKDF2-SHA512, then uses it inside a STARK proof (quantum-safe). Same user experience, different cryptography under the hood.</p>
+<h3>What if I lose my recovery phrase?</h3>
+<p>Your funds are permanently lost. There is no recovery mechanism, no customer support, no backdoor. This is the fundamental tradeoff of self-custody. The identity rotation feature lets you migrate to a new phrase while you still have access, but once you lose the phrase entirely, the vault is inaccessible.</p>
+<h3>How much does a transaction cost?</h3>
+<p>About $0.20 on Arbitrum or Base. This is ~10-20x more than a normal ECDSA transaction ($0.01-0.02) because STARK verification is computationally intensive (~5.6M gas). The cost is the price of quantum resistance. As L2 fees continue to decrease with data availability improvements (EIP-4844 blobs), this cost will drop proportionally.</p>
+<h3>Can I use my vault with DeFi protocols?</h3>
+<p>Yes. The vault is a standard ERC-4337 smart account. It can call any contract, hold any ERC-20 token, and interact with any DeFi protocol on the same chain. The vault's <code>execute()</code> function can encode any arbitrary call. The STARK proof authorizes the transaction; after that, the execution is identical to any other smart wallet.</p>
+<h3>Is the vault app safe to use in my browser?</h3>
+<p>The identity secret (REV) exists in browser memory only during your active session. It is zeroized (overwritten with zeros) when you log out or close the tab. The REV is never transmitted over the network — only the zero-knowledge proof leaves the browser, and the proof reveals nothing about the REV (that's what "zero-knowledge" means).</p>
+<p>That said, browser environments are inherently less secure than hardware wallets. A malicious browser extension, compromised dependency, or memory dump could theoretically extract the REV during an active session. For maximum security, use a clean browser profile with no extensions, or wait for the Ledger hardware integration (planned).</p>
+<h3>What tokens can I store?</h3>
+<p>ETH and any ERC-20 token on the vault's chain (Arbitrum or Base). The vault is a standard smart contract account — it can receive and hold any token. The vault app displays balances for ETH, USDC, USDT, WETH, ARB, DAI, and WBTC by default.</p>
+<hr>
+<h2>For technical reviewers</h2>
+<h3>Why STARKs instead of NIST PQ signatures (ML-DSA/Falcon)?</h3>
+<p>NIST PQ signatures are designed as drop-in replacements for ECDSA. But on EVM, they face two problems:</p>
+<p>1. <strong>Gas cost.</strong> Verifying ML-DSA in Solidity costs ~500M+ gas (no native opcode exists). This is ~100x more expensive than STARK verification (~5.6M gas) because the lattice math doesn't map efficiently to EVM opcodes.</p>
+<p>2. <strong>Calldata size.</strong> ML-DSA signatures are ~2,420 bytes. On L2 rollups where calldata is posted to L1, this is the dominant cost component. STARK proofs are larger (~44 KB) but the verification efficiency makes the total cost lower on L2.</p>
+<p>When EVM-native PQ precompiles arrive (~2029), direct NIST signature verification becomes cheap and these tradeoffs change. Until then, STARKs are the most practical PQ verification option on EVM.</p>
+<h3>Why is the proof 44 KB? The paper says 128 bytes.</h3>
+<p>The paper's reference implementation uses Groth16 (BN254 SNARKs), which produces 128-byte proofs. Groth16 achieves this compactness via elliptic curve pairings — the same mathematical structure that Shor's algorithm breaks. We migrated from Groth16 to STARKs specifically to eliminate the quantum vulnerability. The tradeoff is larger proofs: 44 KB (STARK, quantum-safe) vs 128 bytes (Groth16, quantum-vulnerable). There is no known way to achieve Groth16-sized proofs without using quantum-vulnerable mathematics.</p>
+<h3>Why Rescue-Prime and not Poseidon or Keccak for identity commitments?</h3>
+<p>Rescue-Prime (Rp64_256) is an algebraically-friendly hash function designed for efficient proving inside STARK circuits. It operates natively over the Goldilocks field, meaning the identity commitment computation maps directly to the STARK's field arithmetic with no conversion overhead.</p>
+<p>Keccak256 is used for the outer proof structure (Merkle trees, Fiat-Shamir challenges) because it matches the EVM's native <code>KECCAK256</code> opcode (30 gas), making on-chain verification efficient. Using Keccak for the inner commitment would make the STARK circuit much larger.</p>
+<p>Poseidon is another algebraically-friendly option. Starknet is migrating to Poseidon. A future version of ZK-ACE on Starknet might use Poseidon for better alignment with that ecosystem.</p>
+<h3>Is Rescue-Prime quantum-safe?</h3>
+<p>Yes. Rescue-Prime is a symmetric hash function — its security relies on the one-wayness of the permutation, not on any algebraic structure that quantum computers can exploit. Grover's algorithm provides a quadratic speedup against hash functions, reducing 256-bit security to 128-bit. Our full 4-element Rescue-Prime digest provides 256 bits classically and 128 bits post-quantum, meeting the standard security target.</p>
+<h3>What's the security level?</h3>
+<p>128-bit post-quantum. This comes from multiple independent layers:</p>
+<table><thead><tr>
+<th>Layer</th>
+<th>Security</th>
+</tr></thead><tbody>
+<tr>
+<td>Rescue-Prime commitments (4 × 64-bit elements)</td>
+<td>128-bit PQ (Grover halves 256 to 128)</td>
+</tr>
+<tr>
+<td>STARK soundness (44 queries, blowup 8)</td>
+<td>132-bit (not quantum-affected)</td>
+</tr>
+<tr>
+<td>Proof-of-work grinding</td>
+<td>20 bits additional</td>
+</tr>
+<tr>
+<td>Keccak256 Merkle trees</td>
+<td>128-bit PQ</td>
+</tr>
+</tbody></table>
+<p>The bottleneck is 128-bit from the hash functions, which is the standard post-quantum security target accepted by NIST and the broader cryptographic community.</p>
+<h3>How does the identity secret (REV) relate to the 24-word mnemonic?</h3>
+<pre><code class="lang-">
+24-word BIP-39 mnemonic (256 bits of entropy)
+  → PBKDF2-HMAC-SHA512 (salt = "ZK-ACE-REV-v1", 600,000 iterations)
+  → 64 bytes of derived key material
+  → First 8 bytes → REV (reduced modulo Goldilocks prime p)
+  → Next 8 bytes → salt (reduced modulo p)
+</code></pre>
+<p>The REV is a single Goldilocks field element (64-bit value < p = 2^64 - 2^32 + 1). The 256-bit mnemonic entropy is reduced to a 64-bit field element because the STARK circuit operates over the Goldilocks field. Combined with the salt (also 64-bit), the search space for an attacker is 128 bits classically, 64 bits post-quantum (Grover). The Rescue-Prime commitment adds a further layer: even knowing the REV and salt, the attacker would need to forge a valid STARK proof, which requires breaking 132-bit soundness.</p>
+<h3>Why does IDcom change per chain?</h3>
+<p>IDcom = Rescue-Prime(REV, salt, chainId). Including the chainId provides <strong>domain separation</strong>: a proof generated for Arbitrum (chainId 42161) cannot be used on Base (chainId 8453) because the identity commitment is different. This prevents cross-chain replay attacks. The same mnemonic produces different vault addresses on different chains, but the user experience is unified — one recovery phrase recovers all vaults.</p>
+<h3>Has the code been audited?</h3>
+<p>Not yet by a professional third-party audit firm. The codebase has been through systematic internal security review across 6 iterations covering the STARK verifier, smart contracts, and cryptographic circuits. A professional audit is planned, with Arbitrum's $10M audit subsidy program as the intended funding path. The test suite includes 130 tests (43 Rust, 87 Solidity) with 0 failures, including end-to-end STARK proof verification on mainnet.</p>
+<h3>What proof framework is used?</h3>
+<p>Winterfell 0.13, a Rust implementation of the STARK protocol by Facebook/Meta Research. The proof is generated in the browser via a WebAssembly (WASM) compilation of the Winterfell prover (484 KB). Winterfell is used in production by several projects and has been through extensive testing, though it is not as widely deployed as some alternatives (Plonky3, Stone).</p>
+<h3>Can the verifier be wrong even if tests pass?</h3>
+<p>Yes. Tests check specific inputs; they cannot prove correctness for all inputs. Formal verification (using tools like Halmos or Certora) can provide stronger guarantees, and is planned as a future milestone. The STARK verifier implements 19 discrete verification checks that mirror the Winterfell specification, and the Fiat-Shamir transcript has been cross-validated between Rust and Solidity implementations. However, a professional audit remains the standard for production-grade confidence.</p>
+<h3>What happens if Winterfell has a bug?</h3>
+<p>If the Winterfell STARK prover has a soundness bug, it could potentially allow forged proofs. This risk exists for any proof system. Mitigations:</p>
+<ul>
+<li>Winterfell has been in development since 2020 and is maintained by experienced cryptographers</li>
+<li>The on-chain verifier re-derives all Fiat-Shamir challenges independently (does not trust the prover)</li>
+<li>The 20-bit proof-of-work adds brute-force resistance independent of algebraic soundness</li>
+<li>A future migration to Plonky3 (the EF's preferred proof stack) is under consideration</li>
+</ul>
+<h3>What are the on-chain contract sizes?</h3>
+<table><thead><tr>
+<th>Contract</th>
+<th>Bytecode</th>
+<th>Role</th>
+</tr></thead><tbody>
+<tr>
+<td>StarkVerifier</td>
+<td>~9.5 KB</td>
+<td>STARK proof verification</td>
+</tr>
+<tr>
+<td>StarkZkAceAccount</td>
+<td>~3.5 KB</td>
+<td>Per-user vault</td>
+</tr>
+<tr>
+<td>StarkZkAceAccountFactory</td>
+<td>~4.5 KB</td>
+<td>CREATE2 deployment</td>
+</tr>
+<tr>
+<td>GoldilocksField</td>
+<td>Library (inlined)</td>
+<td>Field arithmetic</td>
+</tr>
+</tbody></table></body></html>

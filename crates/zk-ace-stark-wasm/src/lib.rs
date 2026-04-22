@@ -12,8 +12,9 @@ use winterfell::math::fields::f64::BaseElement;
 use winterfell::Prover;
 
 use zk_ace_stark::prover::{
-    compute_public_inputs, default_proof_options, ZkAceProver, ZkAceWitness,
+    compute_public_inputs, default_proof_options, HashChoice, ZkAceProver, ZkAceWitness,
 };
+use zk_ace_stark::poseidon2::poseidon2_hash_full;
 use zk_ace_stark::rescue::rescue_hash_full;
 
 // ---------------------------------------------------------------------------
@@ -123,9 +124,18 @@ fn pub_inputs_to_u64_vec(
     v
 }
 
+fn parse_hash_choice(hash_choice: &str) -> Result<HashChoice, JsValue> {
+    match hash_choice {
+        "rescue" | "rescue-prime" | "rescue_prime" => Ok(HashChoice::RescuePrime),
+        "poseidon2" => Ok(HashChoice::Poseidon2),
+        other => Err(JsValue::from_str(&format!("Unsupported hash choice: {}", other))),
+    }
+}
+
 /// Parse JSON witness into structured types.
 fn parse_witness(
     json: &str,
+    hash_choice: HashChoice,
 ) -> Result<(ZkAceWitness, [BaseElement; 4]), JsValue> {
     let input: WitnessInput = serde_json::from_str(json)
         .map_err(|e| JsValue::from_str(&format!("Invalid witness JSON: {}", e)))?;
@@ -141,64 +151,38 @@ fn parse_witness(
         ctx_domain: BaseElement::new(input.domain),
         ctx_index: BaseElement::new(input.index),
         nonce: BaseElement::new(input.nonce),
+        hash_choice,
     };
 
     Ok((witness, tx_hash))
 }
 
-// ---------------------------------------------------------------------------
-// Exported WASM functions
-// ---------------------------------------------------------------------------
-
-/// Compute the Rescue-Prime identity commitment from (rev, salt, domain).
-///
-/// Returns a hex-encoded 32-byte string (4 x 8-byte big-endian Goldilocks elements).
-#[wasm_bindgen]
-pub fn compute_id_commitment(
+fn compute_id_commitment_for_hash(
     rev_hex: &str,
     salt_hex: &str,
     domain: u64,
+    hash_choice: HashChoice,
 ) -> Result<String, JsValue> {
     let rev = hex_to_goldilocks(rev_hex)?;
     let salt = hex_to_goldilocks(salt_hex)?;
     let domain_elem = BaseElement::new(domain);
 
-    let id_com = rescue_hash_full(&[rev, salt, domain_elem]);
+    let id_com = match hash_choice {
+        HashChoice::RescuePrime => rescue_hash_full(&[rev, salt, domain_elem]),
+        HashChoice::Poseidon2 => poseidon2_hash_full(&[rev, salt, domain_elem]),
+    };
 
     Ok(elements_to_hex(&id_com))
 }
 
-/// Generate a STARK proof from a JSON witness.
-///
-/// Witness JSON format:
-/// ```json
-/// {
-///   "rev": "0x...",
-///   "salt": "0x...",
-///   "alg_id": 1,
-///   "domain": 42161,
-///   "index": 0,
-///   "nonce": 0,
-///   "tx_hash": "0x..."
-/// }
-/// ```
-///
-/// Returns JSON:
-/// ```json
-/// {
-///   "proof": "0x...",
-///   "pub_inputs": [17 uint64 values],
-///   "id_com": "0x..."
-/// }
-/// ```
-#[wasm_bindgen]
-pub fn generate_stark_proof(witness_json: &str) -> Result<String, JsValue> {
-    let (witness, tx_hash) = parse_witness(witness_json)?;
+fn generate_stark_proof_for_hash(
+    witness_json: &str,
+    hash_choice: HashChoice,
+) -> Result<String, JsValue> {
+    let (witness, tx_hash) = parse_witness(witness_json, hash_choice)?;
 
-    // Compute public inputs
     let public_inputs = compute_public_inputs(&witness, tx_hash);
 
-    // Build trace and generate proof
     let options = default_proof_options();
     let prover = ZkAceProver::new(options);
     let trace = prover.build_trace(&witness, &public_inputs);
@@ -227,25 +211,11 @@ pub fn generate_stark_proof(witness_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
 }
 
-/// Compute and return the public inputs without generating a proof.
-///
-/// This is useful for computing the vault address (which depends on id_com
-/// and target) without the cost of STARK proof generation.
-///
-/// Same witness JSON format as `generate_stark_proof`.
-///
-/// Returns JSON:
-/// ```json
-/// {
-///   "pub_inputs": [17 uint64 values],
-///   "id_com": "0x...",
-///   "target": "0x...",
-///   "rp_com": "0x..."
-/// }
-/// ```
-#[wasm_bindgen]
-pub fn get_proof_public_inputs(witness_json: &str) -> Result<String, JsValue> {
-    let (witness, tx_hash) = parse_witness(witness_json)?;
+fn get_public_inputs_for_hash(
+    witness_json: &str,
+    hash_choice: HashChoice,
+) -> Result<String, JsValue> {
+    let (witness, tx_hash) = parse_witness(witness_json, hash_choice)?;
 
     let public_inputs = compute_public_inputs(&witness, tx_hash);
 
@@ -268,18 +238,136 @@ pub fn get_proof_public_inputs(witness_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))
 }
 
+// ---------------------------------------------------------------------------
+// Exported WASM functions
+// ---------------------------------------------------------------------------
+
+/// Compute the Rescue-Prime identity commitment from (rev, salt, domain).
+///
+/// Returns a hex-encoded 32-byte string (4 x 8-byte big-endian Goldilocks elements).
+#[wasm_bindgen]
+pub fn compute_id_commitment(
+    rev_hex: &str,
+    salt_hex: &str,
+    domain: u64,
+) -> Result<String, JsValue> {
+    compute_id_commitment_for_hash(rev_hex, salt_hex, domain, HashChoice::RescuePrime)
+}
+
+#[wasm_bindgen]
+pub fn compute_id_commitment_rescue(
+    rev_hex: &str,
+    salt_hex: &str,
+    domain: u64,
+) -> Result<String, JsValue> {
+    compute_id_commitment_for_hash(rev_hex, salt_hex, domain, HashChoice::RescuePrime)
+}
+
+#[wasm_bindgen]
+pub fn compute_id_commitment_poseidon2(
+    rev_hex: &str,
+    salt_hex: &str,
+    domain: u64,
+) -> Result<String, JsValue> {
+    compute_id_commitment_for_hash(rev_hex, salt_hex, domain, HashChoice::Poseidon2)
+}
+
+/// Generate a STARK proof from a JSON witness.
+///
+/// Witness JSON format:
+/// ```json
+/// {
+///   "rev": "0x...",
+///   "salt": "0x...",
+///   "alg_id": 1,
+///   "domain": 42161,
+///   "index": 0,
+///   "nonce": 0,
+///   "tx_hash": "0x..."
+/// }
+/// ```
+///
+/// Returns JSON:
+/// ```json
+/// {
+///   "proof": "0x...",
+///   "pub_inputs": [17 uint64 values],
+///   "id_com": "0x..."
+/// }
+/// ```
+#[wasm_bindgen]
+pub fn generate_stark_proof(witness_json: &str) -> Result<String, JsValue> {
+    generate_stark_proof_for_hash(witness_json, HashChoice::RescuePrime)
+}
+
+#[wasm_bindgen]
+pub fn generate_stark_proof_with_hash(
+    witness_json: &str,
+    hash_choice: &str,
+) -> Result<String, JsValue> {
+    generate_stark_proof_for_hash(witness_json, parse_hash_choice(hash_choice)?)
+}
+
+/// Compute and return the public inputs without generating a proof.
+///
+/// This is useful for computing the vault address (which depends on id_com
+/// and target) without the cost of STARK proof generation.
+///
+/// Same witness JSON format as `generate_stark_proof`.
+///
+/// Returns JSON:
+/// ```json
+/// {
+///   "pub_inputs": [17 uint64 values],
+///   "id_com": "0x...",
+///   "target": "0x...",
+///   "rp_com": "0x..."
+/// }
+/// ```
+#[wasm_bindgen]
+pub fn get_proof_public_inputs(witness_json: &str) -> Result<String, JsValue> {
+    get_public_inputs_for_hash(witness_json, HashChoice::RescuePrime)
+}
+
+#[wasm_bindgen]
+pub fn get_proof_public_inputs_with_hash(
+    witness_json: &str,
+    hash_choice: &str,
+) -> Result<String, JsValue> {
+    get_public_inputs_for_hash(witness_json, parse_hash_choice(hash_choice)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_compute_id_commitment() {
+    fn test_compute_id_commitment_rescue_legacy_alias() {
         let result = compute_id_commitment("0xDEADBEEFCAFEBABE", "0x123456789ABCDEF0", 42161);
         assert!(result.is_ok());
         let hex_str = result.unwrap();
         assert!(hex_str.starts_with("0x"));
         // 0x + 64 hex chars = 32 bytes
         assert_eq!(hex_str.len(), 66);
+        assert_eq!(
+            hex_str,
+            compute_id_commitment_rescue("0xDEADBEEFCAFEBABE", "0x123456789ABCDEF0", 42161)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_compute_id_commitment_poseidon2_deterministic() {
+        let r1 = compute_id_commitment_poseidon2("0xDEADBEEF", "0x12345678", 1).unwrap();
+        let r2 = compute_id_commitment_poseidon2("0xDEADBEEF", "0x12345678", 1).unwrap();
+        assert_eq!(r1, r2);
+    }
+
+    #[test]
+    fn test_compute_id_commitment_hashes_differ() {
+        let rescue = compute_id_commitment_rescue("0xDEADBEEF", "0x12345678", 1).unwrap();
+        let poseidon2 = compute_id_commitment_poseidon2("0xDEADBEEF", "0x12345678", 1).unwrap();
+        assert_ne!(rescue, poseidon2);
     }
 
     #[test]
@@ -312,6 +400,25 @@ mod tests {
     }
 
     #[test]
+    fn test_get_proof_public_inputs_with_hash() {
+        let witness = r#"{
+            "rev": "0xDEADBEEFCAFEBABE",
+            "salt": "0x123456789ABCDEF0",
+            "alg_id": 1,
+            "domain": 42161,
+            "index": 0,
+            "nonce": 0,
+            "tx_hash": "0xAAAABBBBCCCCDDDD11112222333344445555666677778888999900001111BBBB"
+        }"#;
+        let rescue = get_proof_public_inputs_with_hash(witness, "rescue").unwrap();
+        let poseidon2 = get_proof_public_inputs_with_hash(witness, "poseidon2").unwrap();
+        let rescue_json: serde_json::Value = serde_json::from_str(&rescue).unwrap();
+        let poseidon2_json: serde_json::Value = serde_json::from_str(&poseidon2).unwrap();
+
+        assert_ne!(rescue_json["id_com"], poseidon2_json["id_com"]);
+    }
+
+    #[test]
     fn test_generate_stark_proof() {
         let witness = r#"{
             "rev": "0xDEADBEEFCAFEBABE",
@@ -329,5 +436,23 @@ mod tests {
         assert!(parsed["proof"].as_str().unwrap().starts_with("0x"));
         assert_eq!(parsed["pub_inputs"].as_array().unwrap().len(), 17);
         assert!(parsed["id_com"].as_str().unwrap().starts_with("0x"));
+    }
+
+    #[test]
+    fn test_generate_stark_proof_with_hash() {
+        let witness = r#"{
+            "rev": "0xDEADBEEFCAFEBABE",
+            "salt": "0x123456789ABCDEF0",
+            "alg_id": 1,
+            "domain": 42161,
+            "index": 0,
+            "nonce": 0,
+            "tx_hash": "0xAAAABBBBCCCCDDDD11112222333344445555666677778888999900001111BBBB"
+        }"#;
+        let result = generate_stark_proof_with_hash(witness, "poseidon2");
+        assert!(result.is_ok());
+        let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert!(parsed["proof"].as_str().unwrap().starts_with("0x"));
+        assert_eq!(parsed["pub_inputs"].as_array().unwrap().len(), 17);
     }
 }

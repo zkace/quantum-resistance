@@ -1,26 +1,24 @@
-import type { ZkAceWitness, ProofResult, Groth16Proof, ZkAcePublicInputs } from './types.js';
+import type { HashChoice, ZkAceWitness, ProofResult } from './types.js';
 import type { Hex } from 'viem';
 import { computeTxHash, encodeSignature } from './encoding.js';
 
 /**
  * ZK-ACE WASM Prover.
  *
- * Wraps the Rust-compiled WASM module to generate Groth16 proofs
- * directly in the browser (~300-600ms per proof).
+ * Wraps the Rust-compiled WASM module to generate STARK proofs
+ * directly in the browser.
  */
 export class ZkAceProver {
   private wasmModule: any;
-  private provingKey: Uint8Array | null = null;
 
-  /** Initialize the prover with the WASM module and proving key. */
-  async init(wasmModule: any, pkBytes: Uint8Array): Promise<void> {
+  /** Initialize the prover with the loaded WASM module. */
+  async init(wasmModule: any): Promise<void> {
     this.wasmModule = wasmModule;
-    this.provingKey = pkBytes;
   }
 
   /** Check if the prover is initialized. */
   get isReady(): boolean {
-    return this.wasmModule != null && this.provingKey != null;
+    return this.wasmModule != null;
   }
 
   /**
@@ -30,7 +28,11 @@ export class ZkAceProver {
    * @param callData - The transaction calldata to authorize
    * @returns Proof result including ABI-encoded signature
    */
-  async generateProof(witness: ZkAceWitness, callData: Hex): Promise<ProofResult> {
+  async generateProof(
+    witness: ZkAceWitness,
+    callData: Hex,
+    hashChoice: HashChoice = witness.hashChoice ?? 'poseidon2'
+  ): Promise<ProofResult> {
     if (!this.isReady) {
       throw new Error('Prover not initialized. Call init() first.');
     }
@@ -45,52 +47,32 @@ export class ZkAceProver {
       domain: Number(witness.domain),
       index: Number(witness.index),
       nonce: Number(witness.nonce),
-      tx_hash: txHash.toString(16).padStart(64, '0'),
+      tx_hash: txHash,
     });
 
-    // Call WASM prover
-    const result = this.wasmModule.generate_proof(witnessJson, this.provingKey);
+    let resultJson: string;
+    if (typeof this.wasmModule.generate_stark_proof_with_hash === 'function') {
+      resultJson = this.wasmModule.generate_stark_proof_with_hash(witnessJson, hashChoice);
+    } else if (hashChoice === 'rescue' && typeof this.wasmModule.generate_stark_proof === 'function') {
+      resultJson = this.wasmModule.generate_stark_proof(witnessJson);
+    } else {
+      throw new Error('The loaded WASM module does not support the requested hash choice.');
+    }
 
-    // Parse proof output
-    const proofBytes = hexToBytes(result.proof);
-    const piBytes = hexToBytes(result.public_inputs);
-
-    const proof: Groth16Proof = {
-      a: [bytesToBigInt(proofBytes, 0, 32), bytesToBigInt(proofBytes, 32, 64)],
-      b: [
-        [bytesToBigInt(proofBytes, 64, 96), bytesToBigInt(proofBytes, 96, 128)],
-        [bytesToBigInt(proofBytes, 128, 160), bytesToBigInt(proofBytes, 160, 192)],
-      ],
-      c: [bytesToBigInt(proofBytes, 192, 224), bytesToBigInt(proofBytes, 224, 256)],
+    const result = JSON.parse(resultJson) as {
+      proof: Hex;
+      pub_inputs: number[];
+      id_com: Hex;
     };
+    const publicInputs = result.pub_inputs.map(BigInt);
+    const encodedSignature = encodeSignature(result.proof, publicInputs);
 
-    const publicInputs: ZkAcePublicInputs = {
-      idCom: bytesToBigInt(piBytes, 0, 32),
-      txHash: bytesToBigInt(piBytes, 32, 64),
-      domain: bytesToBigInt(piBytes, 64, 96),
-      target: bytesToBigInt(piBytes, 96, 128),
-      rpCom: bytesToBigInt(piBytes, 128, 160),
+    return {
+      proof: result.proof,
+      publicInputs,
+      idCom: result.id_com,
+      hashChoice,
+      encodedSignature,
     };
-
-    const encodedSignature = encodeSignature(proof, publicInputs);
-
-    return { proof, publicInputs, encodedSignature };
   }
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(clean.substr(i * 2, 2), 16);
-  }
-  return bytes;
-}
-
-function bytesToBigInt(bytes: Uint8Array, start: number, end: number): bigint {
-  let result = 0n;
-  for (let i = start; i < end; i++) {
-    result = (result << 8n) | BigInt(bytes[i]);
-  }
-  return result;
 }

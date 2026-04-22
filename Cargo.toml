@@ -1,9 +1,5 @@
 [workspace]
 members = [
-    "crates/zk-ace-circuit",
-    "crates/zk-ace-prover",
-    "crates/zk-ace-didp",
-    "crates/zk-ace-wasm",
     "crates/zk-ace-stark",
     "crates/zk-ace-stark-wasm",
 ]

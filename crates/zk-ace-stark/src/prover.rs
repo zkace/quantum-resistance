@@ -10,7 +10,36 @@ use winterfell::{
 };
 
 use crate::air::{ZkAceAir, ZkAcePublicInputs, TRACE_LENGTH, TRACE_WIDTH};
+use crate::poseidon2::poseidon2_hash_full;
 use crate::rescue::rescue_hash_full;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HashChoice {
+    RescuePrime,
+    Poseidon2,
+}
+
+impl Default for HashChoice {
+    fn default() -> Self {
+        Self::Poseidon2
+    }
+}
+
+impl HashChoice {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RescuePrime => "rescue",
+            Self::Poseidon2 => "poseidon2",
+        }
+    }
+}
+
+fn hash_full(hash_choice: HashChoice, inputs: &[BaseElement]) -> [BaseElement; 4] {
+    match hash_choice {
+        HashChoice::RescuePrime => rescue_hash_full(inputs),
+        HashChoice::Poseidon2 => poseidon2_hash_full(inputs),
+    }
+}
 
 /// Private witness for ZK-ACE STARK proof.
 /// Private witness — no Clone/Debug to prevent REV leakage.
@@ -21,27 +50,37 @@ pub struct ZkAceWitness {
     pub ctx_domain: BaseElement,
     pub ctx_index: BaseElement,
     pub nonce: BaseElement,
+    pub hash_choice: HashChoice,
 }
 
-/// Compute public inputs from witness using FULL 4-element Rescue hashes.
-/// This provides 256-bit classical / 128-bit post-quantum security.
+fn derive_commitments(
+    witness: &ZkAceWitness,
+) -> ([BaseElement; 4], [BaseElement; 4], [BaseElement; 4]) {
+    let id_com = hash_full(
+        witness.hash_choice,
+        &[witness.rev, witness.salt, witness.ctx_domain],
+    );
+
+    let derived_key = hash_full(
+        witness.hash_choice,
+        &[witness.rev, witness.alg_id, witness.ctx_domain, witness.ctx_index],
+    );
+    let target = hash_full(witness.hash_choice, &derived_key);
+
+    let rp_com = hash_full(
+        witness.hash_choice,
+        &[id_com[0], id_com[1], id_com[2], id_com[3], witness.nonce],
+    );
+
+    (id_com, target, rp_com)
+}
+
+/// Compute public inputs from witness using the selected 4-element hash.
 pub fn compute_public_inputs(
     witness: &ZkAceWitness,
     tx_hash: [BaseElement; 4],
 ) -> ZkAcePublicInputs {
-    // id_com = RescueHash_full(REV, salt, domain) → 4 elements
-    let id_com = rescue_hash_full(&[witness.rev, witness.salt, witness.ctx_domain]);
-
-    // target = RescueHash_full(derived_key[0..4]) → 4 elements
-    // Uses ALL 4 elements of the derived key for full 128-bit PQ security
-    let derived_key = rescue_hash_full(&[
-        witness.rev, witness.alg_id, witness.ctx_domain, witness.ctx_index,
-    ]);
-    let target = rescue_hash_full(&derived_key);
-
-    // rp_com = RescueHash_full(id_com[0..4], nonce) — uses all 4 elements for 128-bit binding → 4 elements
-    // Uses first element of id_com as binding (the full id_com is verified via boundary assertions)
-    let rp_com = rescue_hash_full(&[id_com[0], id_com[1], id_com[2], id_com[3], witness.nonce]);
+    let (id_com, target, rp_com) = derive_commitments(witness);
 
     ZkAcePublicInputs {
         id_com,
@@ -70,13 +109,7 @@ impl ZkAceProver {
     ) -> TraceTable<BaseElement> {
         let mut trace = TraceTable::new(TRACE_WIDTH, TRACE_LENGTH);
 
-        // Compute all hash values using full 4-element digests
-        let id_com = rescue_hash_full(&[witness.rev, witness.salt, witness.ctx_domain]);
-        let derived_key = rescue_hash_full(&[
-            witness.rev, witness.alg_id, witness.ctx_domain, witness.ctx_index,
-        ]);
-        let target = rescue_hash_full(&derived_key);
-        let rp_com = rescue_hash_full(&[id_com[0], id_com[1], id_com[2], id_com[3], witness.nonce]);
+        let (id_com, target, rp_com) = derive_commitments(witness);
 
         trace.fill(
             |state| {
@@ -186,7 +219,7 @@ mod tests {
     use super::*;
     use winterfell::Trace as _;
 
-    fn test_witness() -> (ZkAceWitness, ZkAcePublicInputs) {
+    fn test_witness(hash_choice: HashChoice) -> (ZkAceWitness, ZkAcePublicInputs) {
         let witness = ZkAceWitness {
             rev: BaseElement::new(0xDEAD_BEEF_CAFE_BABEu64),
             salt: BaseElement::new(0x1234_5678_9ABC_DEF0u64),
@@ -194,6 +227,7 @@ mod tests {
             ctx_domain: BaseElement::new(42161),
             ctx_index: BaseElement::new(0),
             nonce: BaseElement::new(0),
+            hash_choice,
         };
         // tx_hash: keccak256 split into 4 Goldilocks elements
         let tx_hash = [
@@ -208,22 +242,40 @@ mod tests {
 
     #[test]
     fn build_trace_succeeds() {
-        let (witness, public_inputs) = test_witness();
-        let prover = ZkAceProver::new(default_proof_options());
-        let trace = prover.build_trace(&witness, &public_inputs);
-        assert_eq!(trace.width(), TRACE_WIDTH);
-        assert_eq!(trace.length(), TRACE_LENGTH);
+        for hash_choice in [HashChoice::RescuePrime, HashChoice::Poseidon2] {
+            let (witness, public_inputs) = test_witness(hash_choice);
+            let prover = ZkAceProver::new(default_proof_options());
+            let trace = prover.build_trace(&witness, &public_inputs);
+            assert_eq!(trace.width(), TRACE_WIDTH);
+            assert_eq!(trace.length(), TRACE_LENGTH);
+        }
     }
 
     #[test]
     fn prove_and_get_proof_size() {
-        let (witness, public_inputs) = test_witness();
-        let prover = ZkAceProver::new(default_proof_options());
-        let trace = prover.build_trace(&witness, &public_inputs);
-        let proof = prover.prove(trace).expect("Proof generation failed");
-        let proof_bytes = proof.to_bytes();
-        println!("STARK proof size (256-bit commitments): {} bytes ({:.1} KB)",
-            proof_bytes.len(), proof_bytes.len() as f64 / 1024.0);
-        assert!(proof_bytes.len() < 300_000, "Proof should be under 300 KB");
+        for hash_choice in [HashChoice::RescuePrime, HashChoice::Poseidon2] {
+            let (witness, public_inputs) = test_witness(hash_choice);
+            let prover = ZkAceProver::new(default_proof_options());
+            let trace = prover.build_trace(&witness, &public_inputs);
+            let proof = prover.prove(trace).expect("Proof generation failed");
+            let proof_bytes = proof.to_bytes();
+            println!(
+                "STARK proof size for {} commitments: {} bytes ({:.1} KB)",
+                hash_choice.as_str(),
+                proof_bytes.len(),
+                proof_bytes.len() as f64 / 1024.0
+            );
+            assert!(proof_bytes.len() < 300_000, "Proof should be under 300 KB");
+        }
+    }
+
+    #[test]
+    fn public_inputs_change_with_hash_choice() {
+        let (_, rescue_public_inputs) = test_witness(HashChoice::RescuePrime);
+        let (_, poseidon2_public_inputs) = test_witness(HashChoice::Poseidon2);
+
+        assert_ne!(rescue_public_inputs.id_com, poseidon2_public_inputs.id_com);
+        assert_ne!(rescue_public_inputs.target, poseidon2_public_inputs.target);
+        assert_ne!(rescue_public_inputs.rp_com, poseidon2_public_inputs.rp_com);
     }
 }

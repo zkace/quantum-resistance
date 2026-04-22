@@ -156,7 +156,7 @@
 <td><strong>Broken</strong> — Rainbow was broken in 2022</td>
 </tr>
 </tbody></table>
-<p>ZK-ACE sits in the <strong>hash-based</strong> category — the most conservative, most battle-tested foundation. The only assumption is that keccak256 and Rescue-Prime behave as random oracles.</p>
+<p>ZK-ACE sits in the <strong>hash-based</strong> category — the most conservative, most battle-tested foundation. The only assumption is that keccak256 and Poseidon2 behave as random oracles, with Rescue-Prime retained only for legacy vault compatibility.</p>
 <h3>Zero-knowledge proofs — the taxonomy</h3>
 <p>Zero-knowledge proofs come in many flavors. Here's how they relate:</p>
 <pre><code class="lang-">
@@ -241,7 +241,7 @@ The Post-Quantum Blockchain Solution Space
 <p>Timeline estimates for a quantum computer capable of breaking ECDSA: <strong>2027-2033</strong>. When that happens, every wallet on Ethereum, Bitcoin, Solana — everything using elliptic curves — becomes vulnerable.</p>
 <h3>What ZK-ACE does differently</h3>
 <p>Instead of signing transactions with a private key, you <strong>prove in zero knowledge</strong> that you know a secret, without ever revealing the secret or using any elliptic curve math.</p>
-<p>The proof uses only <strong>hash functions</strong> (specifically keccak256, the same hash built into the Ethereum Virtual Machine). Hash functions are symmetric cryptography — Shor's algorithm doesn't help. Grover's algorithm (the best quantum attack on symmetric crypto) only halves the security: 256-bit becomes 128-bit, which is still unbreakable.</p>
+<p>The proof uses only <strong>hash functions</strong> (specifically keccak256 for Merkle trees and Fiat-Shamir, plus Poseidon2 for new identity commitments). Hash functions are symmetric cryptography — Shor's algorithm doesn't help. Grover's algorithm (the best quantum attack on symmetric crypto) only halves the security: 256-bit becomes 128-bit, which is still unbreakable.</p>
 <hr>
 <h2>Part 2: The Core Idea</h2>
 <h3>Identity, not keys</h3>
@@ -269,14 +269,14 @@ The Post-Quantum Blockchain Solution Space
 <td>Proving you know the combination without opening the safe in front of anyone</td>
 </tr>
 </tbody></table>
-<h3>The hash function: Rescue-Prime</h3>
-<p>To compute IDcom from REV, we use <strong>Rescue-Prime</strong> (Rp64_256), a hash function designed for arithmetic circuits. It operates over the <strong>Goldilocks field</strong> and outputs 4 field elements (256 bits total).</p>
+<h3>The hash function: Poseidon2</h3>
+<p>To compute IDcom from REV for new vaults, we use <strong>Poseidon2</strong> over the <strong>Goldilocks field</strong>, using the canonical Plonky3 parameter set. It outputs 4 field elements (256 bits total). Legacy vaults keep their original Rescue-Prime commitments until the user rotates.</p>
 <pre><code class="lang-">
-IDcom = RescuePrime(REV, salt, chainId)
+IDcom = Poseidon2(REV, salt, chainId)
      → 4 Goldilocks elements
      → packed as 32 bytes (bytes32 in Solidity)
 </code></pre>
-<p>Why Rescue-Prime instead of keccak256 for commitments? Because Rescue-Prime is "algebraically friendly" — it's efficient to prove inside a STARK circuit. Keccak256 is used for the Merkle trees and Fiat-Shamir challenges (the outer proof structure), but the identity commitment itself uses Rescue-Prime because that's what gets proven.</p>
+<p>Why Poseidon2 instead of keccak256 for commitments? Because the commitment hash is derived off-chain in witness generation, and Poseidon2 gives us a modern algebraic hash aligned with the Plonky3 ecosystem while keeping the on-chain contract unchanged. Keccak256 is still used for the Merkle trees and Fiat-Shamir challenges (the outer proof structure). Rescue-Prime remains available only for recovering legacy vaults.</p>
 <hr>
 <h2>Part 3: The Goldilocks Field</h2>
 <p>All arithmetic in ZK-ACE happens in the <strong>Goldilocks field</strong>:</p>
@@ -325,16 +325,17 @@ Column 17:      step     (counter: 0, 1, 2, ..., 7)
 <li>At row 0: all 17 public input values must match the trace</li>
 <li>At row 0: step counter must equal 0</li>
 </ul>
-<p>This seems almost trivially simple — the trace is constant except for a counter. The real cryptographic work happens in <strong>how the trace is constructed</strong> (the prover must know the REV to compute the correct IDcom, target, and rpCom via Rescue-Prime hashing). The constraints guarantee the prover committed to a valid computation.</p>
+<p>This seems almost trivially simple — the trace is constant except for a counter. The real cryptographic work happens in <strong>how the trace is constructed</strong> (the prover must know the REV to compute the correct IDcom, target, and rpCom via Poseidon2 for new vaults, or Rescue-Prime for legacy ones). The constraints guarantee the prover committed to a valid computation.</p>
 <h3>The proof pipeline</h3>
 <p>Here's what happens when you authorize a transaction:</p>
 <pre><code class="lang-">
 1. PROVER (your browser, via WASM)
    ├── Inputs: REV (secret), salt, chainId, nonce, txHash
-   ├── Compute: IDcom = Rescue(REV, salt, chainId)
-   ├── Compute: derivedKey = Rescue(REV, algId, chainId, index)
-   ├── Compute: target = Rescue(derivedKey)
-   ├── Compute: rpCom = Rescue(IDcom, nonce)
+   ├── Compute: IDcom = Poseidon2(REV, salt, chainId)
+   ├── Compute: derivedKey = Poseidon2(REV, algId, chainId, index)
+   ├── Compute: target = Poseidon2(derivedKey)
+   ├── Compute: rpCom = Poseidon2(IDcom, nonce)
+   ├── Legacy vaults use the same structure under Rescue-Prime
    ├── Build execution trace (18 × 8 table)
    ├── Extend trace to LDE domain (18 × 64, blowup factor 8)
    ├── Commit to trace via Merkle tree (keccak256)
@@ -374,7 +375,7 @@ Column 17:      step     (counter: 0, 1, 2, ..., 7)
 <th>Post-quantum security</th>
 </tr></thead><tbody>
 <tr>
-<td>Rescue-Prime commitments (4 elements)</td>
+<td>Poseidon2 commitments (legacy Rescue supported)</td>
 <td>256 bits</td>
 <td>128 bits (Grover halves)</td>
 </tr>
@@ -403,13 +404,14 @@ Column 17:      step     (counter: 0, 1, 2, ..., 7)
 <h3>What exactly is proven?</h3>
 <p>The STARK proof demonstrates:</p>
 <blockquote>"I know values (REV, salt) such that:</blockquote>
-<blockquote>- Rescue(REV, salt, chainId) = the IDcom stored on-chain</blockquote>
-<blockquote>- Rescue(Rescue(REV, algId, chainId, index)) = target</blockquote>
-<blockquote>- Rescue(IDcom, nonce) = rpCom</blockquote>
+<blockquote>- Poseidon2(REV, salt, chainId) = the IDcom stored on-chain for new vaults</blockquote>
+<blockquote>- Poseidon2(Poseidon2(REV, algId, chainId, index)) = target</blockquote>
+<blockquote>- Poseidon2(IDcom, nonce) = rpCom</blockquote>
+<blockquote>- Legacy Rescue-Prime vaults keep the same statement structure under their original hash path</blockquote>
 <blockquote>- And these values are consistent with the transaction I'm authorizing"</blockquote>
 <p><strong>Without revealing REV or salt.</strong></p>
 <h3>Replay prevention</h3>
-<p>Each transaction uses a monotonically increasing <code>zkNonce</code>. The replay-prevention commitment <code>rpCom = Rescue(IDcom, nonce)</code> is part of the STARK statement, and the contract increments <code>zkNonce</code> after each verifier-accepted proof. In the current implementation, replay resistance is the combination of that proof statement, <code>callData</code> binding, and ERC-4337 nonce behavior rather than a direct on-chain recomputation of <code>rpCom</code>.</p>
+<p>Each transaction uses a monotonically increasing <code>zkNonce</code>. The replay-prevention commitment <code>rpCom = Poseidon2(IDcom, nonce)</code> is part of the STARK statement for new vaults, while legacy Rescue vaults keep their original path until rotation. The contract increments <code>zkNonce</code> after each verifier-accepted proof. In the current implementation, replay resistance is the combination of that proof statement, <code>callData</code> binding, and ERC-4337 nonce behavior rather than a direct on-chain recomputation of <code>rpCom</code>.</p>
 <h3>Cross-chain replay prevention</h3>
 <p>The <code>domain</code> field is set to <code>block.chainid</code> at deployment. A proof generated for Arbitrum (chainId 42161) won't validate on Ethereum mainnet (chainId 1) because the domain check fails.</p>
 <h3>Why the core authorization path avoids ECDSA</h3>
@@ -418,7 +420,7 @@ Column 17:      step     (counter: 0, 1, 2, ..., 7)
 BIP-39 mnemonic (24 words, 256-bit entropy)
   → PBKDF2-HMAC-SHA512 (symmetric KDF, quantum-safe)
     → REV (identity secret)
-      → Rescue-Prime hash (algebraic hash, quantum-safe)
+      → Poseidon2 hash (algebraic hash, quantum-safe; Rescue-Prime legacy path retained)
         → STARK proof (hash-based proof, quantum-safe)
           → Keccak256 verification (EVM-native hash, quantum-safe)
 </code></pre>
@@ -504,20 +506,21 @@ User (browser)
 <h3>Key derivation (how mnemonic becomes a vault)</h3>
 <pre><code class="lang-">
 24-word BIP-39 mnemonic
-  → PBKDF2-HMAC-SHA512(mnemonic, "ZK-ACE-REV-v1", 600,000 iterations)
+  → PBKDF2-HMAC-SHA512(mnemonic, "ZK-ACE-REV-v2-poseidon2", 600,000 iterations)
   → 64 bytes output
      → First 8 bytes → REV (reduced to Goldilocks field element)
      → Next 8 bytes → salt (reduced to Goldilocks field element)
-  → Rescue-Prime(REV, salt, 42161) → IDcom (32 bytes)
+  → Poseidon2(REV, salt, 42161) → IDcom (32 bytes)
   → Factory.getAddress(IDcom, 0) → vault address (deterministic via CREATE2)
 </code></pre>
-<p>The same mnemonic always produces the same vault address on a given chain. (IDcom includes chainId, so different chains produce different vault addresses from the same mnemonic.) No registration needed — the address exists before deployment.</p>
+<p>The same mnemonic always produces the same vault address on a given chain. New vaults use the <code>ZK-ACE-REV-v2-poseidon2</code> derivation tag; legacy recovery uses the older <code>ZK-ACE-REV-v1</code> Rescue-Prime path when needed. (IDcom includes chainId, so different chains produce different vault addresses from the same mnemonic.) No registration needed — the address exists before deployment.</p>
 <h3>The WASM prover</h3>
 <p>The Winterfell STARK prover (written in Rust) is compiled to WebAssembly (484 KB). It runs entirely in the browser:</p>
 <ul>
-<li><code>compute_id_commitment(rev, salt, domain)</code> — computes Rescue-Prime IDcom</li>
-<li><code>generate_stark_proof(witness_json)</code> — generates full STARK proof (~5-10 seconds)</li>
-<li><code>get_proof_public_inputs(witness_json)</code> — computes public inputs without proving</li>
+<li><code>compute_id_commitment_poseidon2(rev, salt, domain)</code> — computes the default Poseidon2 IDcom</li>
+<li><code>compute_id_commitment_rescue(rev, salt, domain)</code> — legacy Rescue-Prime recovery path</li>
+<li><code>generate_stark_proof_with_hash(witness_json, hashChoice)</code> — generates a STARK proof for the selected hash path</li>
+<li><code>get_proof_public_inputs_with_hash(witness_json, hashChoice)</code> — computes public inputs without proving</li>
 </ul>
 <p>No server needed. No API calls for proof generation. The REV never leaves the browser.</p>
 <h3>What the app does</h3>
@@ -685,7 +688,7 @@ User (browser)
 <p><strong>Q: "Why Goldilocks field instead of BN254?"</strong></p>
 <p>A: BN254 (used by Groth16/SNARKs) relies on elliptic curve pairings — quantum-vulnerable. Goldilocks is a prime field with no elliptic curve assumptions. It also has efficient 64-bit arithmetic and nice FFT-friendly properties.</p>
 <p><strong>Q: "Why 8 rows? That seems tiny."</strong></p>
-<p>A: The trace length is independent of security. Our AIR is simple (constant columns + counter) because the hard work (Rescue-Prime hashing) happens during trace construction, not in the constraints themselves. The 8-row trace is sufficient to encode all the public inputs we need to verify. Security comes from the number of FRI queries (44) and the blowup factor (8), not the trace length.</p>
+<p>A: The trace length is independent of security. Our AIR is simple (constant columns + counter) because the hard work (Poseidon2 hashing for new vaults, Rescue-Prime for legacy recovery) happens during trace construction, not in the constraints themselves. The 8-row trace is sufficient to encode all the public inputs we need to verify. Security comes from the number of FRI queries (44) and the blowup factor (8), not the trace length.</p>
 <p><strong>Q: "What if quantum computers break keccak256?"</strong></p>
 <p>A: Keccak256 is a symmetric primitive. The best known quantum attack (Grover) reduces 256-bit security to 128-bit. Breaking 128-bit symmetric crypto would require roughly 2^128 quantum operations — this is not feasible even with theoretical future quantum computers. The cryptographic community consensus is that 128-bit symmetric security is safe post-quantum.</p>
 <p><strong>Q: "Why STARKs over SNARKs?"</strong></p>
@@ -1108,7 +1111,7 @@ User (browser)
 <p><strong>You say:</strong> "Then every dollar spent on PQ today was insurance that didn't pay out — like fire insurance on a house that didn't burn. But the cost of being wrong is catastrophic: $100B+ in Ethereum assets become vulnerable overnight, with no migration path ready. The EF is spending $25M on this. Google set an internal 2029 deadline. NIST has a 2030 deprecation timeline. The question isn't whether to prepare — it's whether to prepare now or scramble later. We'd rather be 3 years early than 3 minutes late."</p>
 <h3>Scenario: "Is your approach better than NIST signatures?"</h3>
 <p><strong>You say:</strong> "They solve different problems. NIST signatures (ML-DSA, Falcon) are general-purpose — they replace ECDSA directly. But they're 30-50x larger than ECDSA, which makes them expensive on L2 rollups where calldata dominates costs. STARKs offer a different tradeoff: the proof is compact (44 KB vs 24 KB for Lamport), stateless (no one-time key limitation), and uses only hash functions (the most conservative PQ assumption). The EF is pursuing both — NIST precompiles for direct verification, account abstraction for STARK-based verification. We think both will coexist."</p>
-<h3>Scenario: Someone mentions Rescue-Prime isn't NIST-standardized</h3>
-<p><strong>You say:</strong> "Correct — Rescue-Prime is not a NIST standard. It's an algebraically-friendly hash function designed for efficient proving in STARK circuits. It's used only for the identity commitment computation inside the proof. The external cryptography — Merkle trees, Fiat-Shamir challenges, proof-of-work — all use Keccak256, which is the NIST SHA-3 standard. The security of the system doesn't depend on Rescue-Prime being a standard — it depends on it being a secure hash function, which it is (no known attacks, used across multiple STARK deployments including StarkWare's production systems)."</p>
+<h3>Scenario: Someone asks why Poseidon2 isn't a NIST standard hash</h3>
+<p><strong>You say:</strong> "Correct — Poseidon2 is not a NIST standard. It's a proving-oriented algebraic hash chosen because it fits Goldilocks-field workflows cleanly and aligns with the Plonky3 ecosystem. In ZK-ACE it's used only for off-chain identity-commitment derivation; the external cryptography — Merkle trees, Fiat-Shamir challenges, proof-of-work — still uses Keccak256, which is the NIST SHA-3 standard. Legacy Rescue-Prime vaults remain recoverable, but new vaults move to Poseidon2 because it's the cleaner long-term proving hash."</p>
 <h3>Scenario: "How many users do you have?"</h3>
 <p><strong>You say honestly:</strong> "We just deployed. We have confirmed mainnet transactions and the infrastructure is live. We're currently focused on institutional adoption — onboarding DAO treasuries as the first users — rather than retail growth. Quantum resistance is a security feature for high-value assets, not a consumer product. The first users will be treasuries and custody providers who are under pressure from boards and regulators to show quantum readiness."</p></body></html>

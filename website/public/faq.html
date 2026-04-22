@@ -80,12 +80,12 @@
 <p>When EVM-native PQ precompiles arrive (~2029), direct NIST signature verification becomes cheap and these tradeoffs change. Until then, STARKs are the most practical PQ verification option on EVM.</p>
 <h3>Why is the proof 44 KB? The paper says 128 bytes.</h3>
 <p>The paper's reference implementation uses Groth16 (BN254 SNARKs), which produces 128-byte proofs. Groth16 achieves this compactness via elliptic curve pairings — the same mathematical structure that Shor's algorithm breaks. We migrated from Groth16 to STARKs specifically to eliminate the quantum vulnerability. The tradeoff is larger proofs: 44 KB (STARK, quantum-safe) vs 128 bytes (Groth16, quantum-vulnerable). There is no known way to achieve Groth16-sized proofs without using quantum-vulnerable mathematics.</p>
-<h3>Why Rescue-Prime and not Poseidon or Keccak for identity commitments?</h3>
-<p>Rescue-Prime (Rp64_256) is an algebraically-friendly hash function designed for efficient proving inside STARK circuits. It operates natively over the Goldilocks field, meaning the identity commitment computation maps directly to the STARK's field arithmetic with no conversion overhead.</p>
-<p>Keccak256 is used for the outer proof structure (Merkle trees, Fiat-Shamir challenges) because it matches the EVM's native <code>KECCAK256</code> opcode (30 gas), making on-chain verification efficient. Using Keccak for the inner commitment would make the STARK circuit much larger.</p>
-<p>Poseidon is another algebraically-friendly option. Starknet is migrating to Poseidon. A future version of ZK-ACE on Starknet might use Poseidon for better alignment with that ecosystem.</p>
-<h3>Is Rescue-Prime quantum-safe?</h3>
-<p>Yes. Rescue-Prime is a symmetric hash function — its security relies on the one-wayness of the permutation, not on any algebraic structure that quantum computers can exploit. Grover's algorithm provides a quadratic speedup against hash functions, reducing 256-bit security to 128-bit. Our full 4-element Rescue-Prime digest provides 256 bits classically and 128 bits post-quantum, meeting the standard security target.</p>
+<h3>Why Poseidon2 for identity commitments, and why keep Rescue-Prime for legacy vaults?</h3>
+<p>Poseidon2 over the Goldilocks field is now the default identity-commitment hash in ZK-ACE. It is algebraically friendly, uses the canonical Plonky3 parameter set, and fits the off-chain witness-derivation step cleanly without requiring any smart contract or AIR rewrite.</p>
+<p>Keccak256 is still used for the outer proof structure (Merkle trees, Fiat-Shamir challenges) because it matches the EVM's native <code>KECCAK256</code> opcode (30 gas), making on-chain verification efficient. The commitment hash itself is not recomputed on-chain; the contract stores <code>idCom</code> as an opaque <code>bytes32</code>.</p>
+<p>Rescue-Prime remains supported only for pre-migration vaults so users can still recover older vaults and voluntarily rotate them to Poseidon2 through the existing 48-hour timelock, with no contract migration.</p>
+<h3>Is Poseidon2 quantum-safe? What about legacy Rescue-Prime vaults?</h3>
+<p>Yes. Poseidon2 and Rescue-Prime are both symmetric hash functions. Their security relies on one-wayness, not on elliptic-curve or pairing assumptions that Shor's algorithm breaks. Grover's algorithm gives only a quadratic speedup, reducing a 256-bit hash target to 128-bit post-quantum security. ZK-ACE's 4-element digest therefore preserves the standard 128-bit post-quantum target in both the new Poseidon2 path and the legacy Rescue-Prime path.</p>
 <h3>What's the security level?</h3>
 <p>128-bit post-quantum. This comes from multiple independent layers:</p>
 <table><thead><tr>
@@ -93,7 +93,7 @@
 <th>Security</th>
 </tr></thead><tbody>
 <tr>
-<td>Rescue-Prime commitments (4 × 64-bit elements)</td>
+<td>Poseidon2 commitments (legacy Rescue-Prime supported)</td>
 <td>128-bit PQ (Grover halves 256 to 128)</td>
 </tr>
 <tr>
@@ -113,14 +113,14 @@
 <h3>How does the identity secret (REV) relate to the 24-word mnemonic?</h3>
 <pre><code class="lang-">
 24-word BIP-39 mnemonic (256 bits of entropy)
-  → PBKDF2-HMAC-SHA512 (salt = "ZK-ACE-REV-v1", 600,000 iterations)
+  → PBKDF2-HMAC-SHA512 (salt = "ZK-ACE-REV-v2-poseidon2", 600,000 iterations)
   → 64 bytes of derived key material
   → First 8 bytes → REV (reduced modulo Goldilocks prime p)
   → Next 8 bytes → salt (reduced modulo p)
 </code></pre>
-<p>The REV is a single Goldilocks field element (64-bit value < p = 2^64 - 2^32 + 1). The 256-bit mnemonic entropy is reduced to a 64-bit field element because the STARK circuit operates over the Goldilocks field. Combined with the salt (also 64-bit), the search space for an attacker is 128 bits classically, 64 bits post-quantum (Grover). The Rescue-Prime commitment adds a further layer: even knowing the REV and salt, the attacker would need to forge a valid STARK proof, which requires breaking 132-bit soundness.</p>
+<p>The REV is a single Goldilocks field element (64-bit value < p = 2^64 - 2^32 + 1). The 256-bit mnemonic entropy is reduced to a 64-bit field element because the STARK circuit operates over the Goldilocks field. Combined with the salt (also 64-bit), the search space for an attacker is 128 bits classically, 64 bits post-quantum (Grover). The Poseidon2 commitment adds a further layer for new vaults, and legacy Rescue-Prime vaults retain the same 128-bit post-quantum target; in both cases an attacker would still need to forge a valid STARK proof, which requires breaking 132-bit soundness.</p>
 <h3>Why does IDcom change per chain?</h3>
-<p>IDcom = Rescue-Prime(REV, salt, chainId). Including the chainId provides <strong>domain separation</strong>: a proof generated for Arbitrum (chainId 42161) cannot be used on Base (chainId 8453) because the identity commitment is different. This prevents cross-chain replay attacks. The same mnemonic produces different vault addresses on different chains, but the user experience is unified — one recovery phrase recovers all vaults.</p>
+<p>For new vaults, <code>IDcom = Poseidon2(REV, salt, chainId)</code>. Legacy vaults continue to use their original Rescue-Prime commitment until the user rotates. Including the chainId provides <strong>domain separation</strong>: a proof generated for Arbitrum (chainId 42161) cannot be used on Base (chainId 8453) because the identity commitment is different. This prevents cross-chain replay attacks. The same mnemonic produces different vault addresses on different chains, but the user experience is unified — one recovery phrase recovers all vaults.</p>
 <h3>Has the code been audited?</h3>
 <p>Not yet by a professional third-party audit firm. The codebase has been through systematic internal security review across 6 iterations covering the STARK verifier, smart contracts, and cryptographic circuits. A professional audit is planned, with Arbitrum's $10M audit subsidy program as the intended funding path. The test suite includes 130 tests (43 Rust, 87 Solidity) with 0 failures, including end-to-end STARK proof verification on mainnet.</p>
 <h3>What proof framework is used?</h3>

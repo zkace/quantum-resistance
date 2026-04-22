@@ -32,7 +32,7 @@ use winterfell::Prover;
 
 use zk_ace_stark::keccak_hasher::{KeccakDigest, KeccakHash};
 use zk_ace_stark::prover::{
-    compute_public_inputs, default_proof_options, ZkAceProver, ZkAceWitness,
+    compute_public_inputs, default_proof_options, HashChoice, ZkAceProver, ZkAceWitness,
 };
 use zk_ace_stark::verifier::verify_proof;
 
@@ -86,6 +86,14 @@ fn encode_u64(abi: &mut Vec<u8>, val: u64) {
     abi.extend_from_slice(&val.to_be_bytes());
 }
 
+fn parse_hash_choice(arg: Option<&String>) -> HashChoice {
+    match arg.map(|value| value.as_str()) {
+        Some("rescue") | Some("rescue-prime") | Some("rescue_prime") => HashChoice::RescuePrime,
+        Some("poseidon2") | None => HashChoice::Poseidon2,
+        Some(other) => panic!("unsupported hash choice: {other}"),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 
 fn main() {
@@ -94,9 +102,10 @@ fn main() {
     // =====================================================================
     let args: Vec<String> = std::env::args().collect();
 
-    // Optional: pass calldata hex, nonce, and domain as CLI args for real transactions
-    // Usage: gen_sol_proof [calldata_hex] [nonce] [domain]
+    // Optional: pass calldata hex, nonce, domain, and hash choice as CLI args.
+    // Usage: gen_sol_proof [calldata_hex] [nonce] [domain] [hash_choice]
     let domain_val: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(42161);
+    let hash_choice = parse_hash_choice(args.get(4));
 
     let (tx_hash, nonce_val) = if args.len() > 1 {
         let calldata_hex = &args[1];
@@ -131,6 +140,7 @@ fn main() {
         ctx_domain: B::new(domain_val),
         ctx_index: B::new(0),
         nonce: B::new(nonce_val),
+        hash_choice,
     };
     let public_inputs = compute_public_inputs(&witness, tx_hash);
     let options = default_proof_options();
@@ -437,6 +447,7 @@ fn main() {
     };
 
     let output = json!({
+        "hash_choice": witness.hash_choice.as_str(),
         "proof_hex": proof_hex,
         "proof_size": abi.len(),
         "public_inputs": pi_vec,

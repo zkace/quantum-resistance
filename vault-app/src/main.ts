@@ -33,9 +33,16 @@ const CHAIN_ID = 42161n;
 const GOLDILOCKS_P = 18446744069414584321n;
 const ENTRYPOINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 const STARK_VERIFIER: Address = '0xE1B8750ED6Fd835e7D27a1A4F08532BDbFb9F6d4';
-const KDF_SALT = 'ZK-ACE-REV-v1';
 const KDF_ITERATIONS = 600_000;
 const ZERO_BYTES32 = ('0x' + '0'.repeat(64)) as Hex;
+const HASH_CHOICE_STORAGE_KEY = 'zkace:vault-hash-choices:v1';
+const IDENTITY_ALIAS_STORAGE_KEY = 'zkace:vault-identity-aliases:v1';
+const PENDING_ROTATION_STORAGE_KEY = 'zkace:pending-rotations:v1';
+const DEFAULT_HASH_CHOICE: VaultHashChoice = 'poseidon2';
+const KDF_SALTS: Record<VaultHashChoice, string> = {
+  rescue: 'ZK-ACE-REV-v1',
+  poseidon2: 'ZK-ACE-REV-v2-poseidon2',
+};
 // StarkZkAceAccountFactory deployed on Arbitrum One
 const STARK_FACTORY: Address = '0x5c7D026978Fa2D159dCC0Bb87F25DbaBfE872614';
 
@@ -173,9 +180,12 @@ const TOKENS: TokenInfo[] = [
 
 // ── Types ──────────────────────────────────────────────────
 
+type VaultHashChoice = 'rescue' | 'poseidon2';
+
 interface VaultSession {
   rev: Uint8Array;           // 32 bytes — identity secret, never persisted
   commitmentSalt: Uint8Array; // 32 bytes — deterministic from mnemonic
+  hashChoice: VaultHashChoice;
   idCom: Hex;                // bytes32 — packed 4 Goldilocks elements
   vaultAddress: Address;
   deployed: boolean;
@@ -183,6 +193,7 @@ interface VaultSession {
   paused: boolean | null;
   pendingIdCom: Hex;
   rotationUnlocksAt: bigint | null;
+  pendingHashChoice: VaultHashChoice | null;
 }
 
 interface AssetBalance {
@@ -192,6 +203,15 @@ interface AssetBalance {
   balance: bigint;
   decimals: number;
   usdPrice: number;
+}
+
+interface DerivedVaultCandidate {
+  rev: Uint8Array;
+  salt: Uint8Array;
+  hashChoice: VaultHashChoice;
+  idCom: Hex;
+  vaultAddress: Address;
+  deployed: boolean;
 }
 
 // ── WASM Prover ────────────────────────────────────────────
@@ -217,6 +237,120 @@ async function loadWasm(): Promise<void> {
     wasmLoadError = err instanceof Error ? err.message : String(err);
     console.warn('WASM prover failed to load:', err);
     throw err;
+  }
+}
+
+function readStoredHashChoices(): Record<string, VaultHashChoice> {
+  try {
+    const raw = localStorage.getItem(HASH_CHOICE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: Record<string, VaultHashChoice> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value === 'rescue' || value === 'poseidon2') {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function getStoredHashChoice(vaultAddress: Address): VaultHashChoice | null {
+  const stored = readStoredHashChoices()[vaultAddress.toLowerCase()];
+  return stored ?? null;
+}
+
+function storeHashChoice(vaultAddress: Address, hashChoice: VaultHashChoice) {
+  try {
+    const registry = readStoredHashChoices();
+    registry[vaultAddress.toLowerCase()] = hashChoice;
+    localStorage.setItem(HASH_CHOICE_STORAGE_KEY, JSON.stringify(registry));
+  } catch {
+    // localStorage can be unavailable; recovery still falls back to on-chain detection
+  }
+}
+
+function readStoredIdentityAliases(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(IDENTITY_ALIAS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string' && value.startsWith('0x')) {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function getStoredVaultAddressForIdCom(idCom: Hex): Address | null {
+  const address = readStoredIdentityAliases()[idCom.toLowerCase()];
+  return address ? getAddress(address) : null;
+}
+
+function storeVaultIdentity(vaultAddress: Address, idCom: Hex) {
+  try {
+    const registry = readStoredIdentityAliases();
+    registry[idCom.toLowerCase()] = vaultAddress;
+    localStorage.setItem(IDENTITY_ALIAS_STORAGE_KEY, JSON.stringify(registry));
+  } catch {
+    // best-effort cache only
+  }
+}
+
+interface PendingRotationRecord {
+  nextIdCom: Hex;
+  hashChoice: VaultHashChoice;
+}
+
+function readPendingRotations(): Record<string, PendingRotationRecord> {
+  try {
+    const raw = localStorage.getItem(PENDING_ROTATION_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, PendingRotationRecord>;
+    const result: Record<string, PendingRotationRecord> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        value &&
+        typeof value.nextIdCom === 'string' &&
+        (value.hashChoice === 'rescue' || value.hashChoice === 'poseidon2')
+      ) {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function getPendingRotation(vaultAddress: Address): PendingRotationRecord | null {
+  return readPendingRotations()[vaultAddress.toLowerCase()] ?? null;
+}
+
+function storePendingRotation(vaultAddress: Address, nextIdCom: Hex, hashChoice: VaultHashChoice) {
+  try {
+    const registry = readPendingRotations();
+    registry[vaultAddress.toLowerCase()] = { nextIdCom, hashChoice };
+    localStorage.setItem(PENDING_ROTATION_STORAGE_KEY, JSON.stringify(registry));
+  } catch {
+    // best-effort cache only
+  }
+}
+
+function clearPendingRotation(vaultAddress: Address) {
+  try {
+    const registry = readPendingRotations();
+    delete registry[vaultAddress.toLowerCase()];
+    localStorage.setItem(PENDING_ROTATION_STORAGE_KEY, JSON.stringify(registry));
+  } catch {
+    // best-effort cache only
   }
 }
 
@@ -320,10 +454,13 @@ function showProofOverlay(visible: boolean, status = '', detail = '') {
 
 // ── Cryptography ───────────────────────────────────────────
 
-async function deriveKeyMaterial(mnemonic: string): Promise<{ rev: Uint8Array; salt: Uint8Array }> {
+async function deriveKeyMaterial(
+  mnemonic: string,
+  hashChoice: VaultHashChoice
+): Promise<{ rev: Uint8Array; salt: Uint8Array }> {
   const encoder = new TextEncoder();
   const password = encoder.encode(mnemonic.normalize('NFKD'));
-  const saltBytes = encoder.encode(KDF_SALT);
+  const saltBytes = encoder.encode(KDF_SALTS[hashChoice]);
 
   // PBKDF2-HMAC-SHA512: 600k iterations → 64 bytes
   // First 32 = REV (identity secret), last 32 = commitment salt
@@ -341,20 +478,70 @@ async function deriveKeyMaterial(mnemonic: string): Promise<{ rev: Uint8Array; s
 /**
  * Compute identity commitment from REV + salt + domain.
  *
- * Uses the Rescue-Prime WASM path only.
+ * Uses the selected WASM hash path.
  * If the prover is not loaded, derivation is blocked.
  *
  * The result is packed as bytes32: 4 × uint64 big-endian.
  */
-function computeIdCom(rev: Uint8Array, salt: Uint8Array, domain: bigint): Hex {
+function computeIdCom(
+  rev: Uint8Array,
+  salt: Uint8Array,
+  domain: bigint,
+  hashChoice: VaultHashChoice
+): Hex {
   if (!wasmReady || !wasmModule) {
     throw new Error('STARK prover is not ready. Wallet address derivation is blocked until WASM loads.');
   }
 
-  // Production path only: Rescue-Prime hash via WASM.
   const revElem = reduceBytesToGoldilocks(rev);
   const saltElem = reduceBytesToGoldilocks(salt);
-  return wasmModule.compute_id_commitment(revElem, saltElem, domain) as Hex;
+
+  return hashChoice === 'poseidon2'
+    ? (wasmModule.compute_id_commitment_poseidon2(revElem, saltElem, domain) as Hex)
+    : (wasmModule.compute_id_commitment_rescue(revElem, saltElem, domain) as Hex);
+}
+
+async function deriveVaultCandidate(
+  mnemonic: string,
+  hashChoice: VaultHashChoice
+): Promise<DerivedVaultCandidate> {
+  const { rev, salt } = await deriveKeyMaterial(mnemonic, hashChoice);
+  const idCom = computeIdCom(rev, salt, CHAIN_ID, hashChoice);
+  const rememberedAddress = getStoredVaultAddressForIdCom(idCom);
+  const derivedAddress = rememberedAddress ?? await getVaultAddress(idCom);
+  if (!derivedAddress) {
+    throw new Error(`Unable to derive the ${hashChoice} vault address from the live STARK factory.`);
+  }
+
+  const deployed = await checkDeployed(derivedAddress);
+
+  return {
+    rev,
+    salt,
+    hashChoice,
+    idCom,
+    vaultAddress: derivedAddress,
+    deployed,
+  };
+}
+
+function selectVaultCandidate(
+  candidates: DerivedVaultCandidate[],
+  preferredHashChoice?: VaultHashChoice
+): DerivedVaultCandidate {
+  for (const candidate of candidates) {
+    if (getStoredHashChoice(candidate.vaultAddress) === candidate.hashChoice) {
+      return candidate;
+    }
+  }
+
+  const deployedCandidates = candidates.filter((candidate) => candidate.deployed);
+  if (deployedCandidates.length === 1) return deployedCandidates[0];
+
+  const preferred = preferredHashChoice ?? DEFAULT_HASH_CHOICE;
+  return (
+    candidates.find((candidate) => candidate.hashChoice === preferred) ?? candidates[0]
+  );
 }
 
 function packGoldilocksElements(e0: bigint, e1: bigint, e2: bigint, e3: bigint): Hex {
@@ -578,6 +765,10 @@ async function renderDashboard() {
     session.paused = paused;
     session.pendingIdCom = rotation?.pendingIdCom ?? ZERO_BYTES32;
     session.rotationUnlocksAt = rotation?.rotationUnlocksAt ?? null;
+    session.pendingHashChoice =
+      session.pendingIdCom !== ZERO_BYTES32
+        ? (getPendingRotation(session.vaultAddress)?.hashChoice ?? null)
+        : null;
 
     $('settings-deployed').textContent = 'Live on Arbitrum';
     $('settings-nonce').textContent = nonce === null ? 'Unavailable' : nonce.toString();
@@ -587,16 +778,27 @@ async function renderDashboard() {
       if (session.rotationUnlocksAt && session.rotationUnlocksAt > BigInt(Math.floor(Date.now() / 1000))) {
         $('settings-rotation').textContent = 'Pending timelock';
         $('rotate-label').textContent = 'Rotation Pending';
-        $('rotate-desc').textContent = 'Waiting for the 48h timelock before confirmation.';
+        $('rotate-desc').textContent =
+          session.pendingHashChoice === 'poseidon2'
+            ? 'Waiting for the 48h timelock before switching this vault to Poseidon2.'
+            : 'Waiting for the 48h timelock before confirmation.';
       } else {
         $('settings-rotation').textContent = 'Ready to confirm';
         $('rotate-label').textContent = 'Confirm Rotation';
-        $('rotate-desc').textContent = 'Submit a proof to finalize the pending identity change.';
+        $('rotate-desc').textContent =
+          session.pendingHashChoice === 'poseidon2'
+            ? 'Submit a proof to finalize the pending switch to Poseidon2.'
+            : 'Submit a proof to finalize the pending identity change.';
       }
     } else {
-      $('settings-rotation').textContent = 'None pending';
-      $('rotate-label').textContent = 'Rotate Identity';
-      $('rotate-desc').textContent = 'Paste a new 24-word recovery phrase to start a 48h timelock.';
+      $('settings-rotation').textContent =
+        session.hashChoice === 'poseidon2' ? 'None pending (Poseidon2 active)' : 'None pending (legacy Rescue)';
+      $('rotate-label').textContent =
+        session.hashChoice === 'poseidon2' ? 'Rotate Identity' : 'Rotate to Poseidon2';
+      $('rotate-desc').textContent =
+        session.hashChoice === 'poseidon2'
+          ? 'Paste a new 24-word recovery phrase to start a 48h timelock.'
+          : 'Upgrade this legacy vault to Poseidon2 with a new 24-word recovery phrase and the existing 48h timelock.';
     }
 
     $('pause-label').textContent = paused ? 'Unpause Vault' : 'Emergency Pause';
@@ -606,13 +808,15 @@ async function renderDashboard() {
     session.paused = null;
     session.pendingIdCom = ZERO_BYTES32;
     session.rotationUnlocksAt = null;
+    session.pendingHashChoice = null;
     $('settings-deployed').textContent = 'Counterfactual only';
     $('settings-nonce').textContent = '0 (predeploy)';
     $('settings-paused').textContent = 'Unavailable until deployment';
-    $('settings-rotation').textContent = 'Unavailable until deployment';
+    $('settings-rotation').textContent = session.hashChoice === 'poseidon2' ? 'Poseidon2 default' : 'Legacy Rescue';
     $('pause-label').textContent = 'Emergency Pause';
     $('pause-desc').textContent = 'Deploy the vault first to change pause state.';
-    $('rotate-label').textContent = 'Rotate Identity';
+    $('rotate-label').textContent =
+      session.hashChoice === 'poseidon2' ? 'Rotate Identity' : 'Rotate to Poseidon2';
     $('rotate-desc').textContent = 'Deploy the vault first to start or confirm a rotation.';
   }
 }
@@ -806,7 +1010,10 @@ async function buildStarkSignature(activeSession: VaultSession, calldata: Hex): 
   };
 
   await new Promise((r) => setTimeout(r, 50));
-  const resultJson = wasmModule.generate_stark_proof(JSON.stringify(witness));
+  const resultJson = wasmModule.generate_stark_proof_with_hash(
+    JSON.stringify(witness),
+    activeSession.hashChoice
+  );
   const result = JSON.parse(resultJson);
   const proofBytes = result.proof as Hex;
   const pubInputs = result.pub_inputs as number[];
@@ -861,7 +1068,7 @@ async function handleConfirmCreate() {
   if (!mnemonic) return;
   delete ($('btn-confirm-create') as any)._mnemonic;
 
-  await unlockVault(mnemonic);
+  await unlockVault(mnemonic, DEFAULT_HASH_CHOICE);
 }
 
 async function handleImport() {
@@ -881,32 +1088,43 @@ async function handleConfirmImport() {
   await unlockVault(raw);
 }
 
-async function unlockVault(mnemonic: string) {
+async function unlockVault(
+  mnemonic: string,
+  preferredHashChoice?: VaultHashChoice
+) {
   showProofOverlay(true, 'Deriving Keys', 'Running PBKDF2-SHA512 with 600,000 iterations\u2026');
 
   try {
     await ensureWasmReady();
-    const { rev, salt } = await deriveKeyMaterial(mnemonic);
-    const idCom = computeIdCom(rev, salt, CHAIN_ID);
+    const candidates = await Promise.all([
+      deriveVaultCandidate(mnemonic, 'poseidon2'),
+      deriveVaultCandidate(mnemonic, 'rescue'),
+    ]);
+    const selected = selectVaultCandidate(candidates, preferredHashChoice);
 
-    const vaultAddress = await getVaultAddress(idCom);
-    if (!vaultAddress) {
-      throw new Error('Unable to derive the vault address from the live STARK factory.');
+    for (const candidate of candidates) {
+      if (candidate !== selected) {
+        zeroize(candidate.rev);
+        zeroize(candidate.salt);
+      }
     }
 
-    const deployed = await checkDeployed(vaultAddress);
-
     session = {
-      rev,
-      commitmentSalt: salt,
-      idCom,
-      vaultAddress,
-      deployed,
-      zkNonce: deployed ? null : 0n,
+      rev: selected.rev,
+      commitmentSalt: selected.salt,
+      hashChoice: selected.hashChoice,
+      idCom: selected.idCom,
+      vaultAddress: selected.vaultAddress,
+      deployed: selected.deployed,
+      zkNonce: selected.deployed ? null : 0n,
       paused: null,
       pendingIdCom: ZERO_BYTES32,
       rotationUnlocksAt: null,
+      pendingHashChoice: null,
     };
+
+    storeHashChoice(session.vaultAddress, session.hashChoice);
+    storeVaultIdentity(session.vaultAddress, session.idCom);
 
     // Fetch prices and render dashboard
     prices = await fetchPrices();
@@ -1086,13 +1304,23 @@ async function handleRotate() {
         confirmCalldata,
         'Generating a proof to confirm the pending identity rotation...'
       );
+      const pendingRotation = getPendingRotation(session.vaultAddress);
+      if (pendingRotation) {
+        storeHashChoice(session.vaultAddress, pendingRotation.hashChoice);
+        storeVaultIdentity(session.vaultAddress, pendingRotation.nextIdCom);
+        clearPendingRotation(session.vaultAddress);
+      }
       showProofOverlay(false);
-      showToast('Rotation confirmed: ' + txHash.slice(0, 18) + '...', 'success');
-      await renderDashboard();
+      showToast('Rotation confirmed: ' + txHash.slice(0, 18) + '... Unlock again with the new recovery phrase.', 'success');
+      handleLogout();
       return;
     }
 
-    const rawMnemonic = prompt('Paste the new 24-word recovery phrase that should control this vault after the 48h timelock.');
+    const promptText =
+      session.hashChoice === 'poseidon2'
+        ? 'Paste the new 24-word recovery phrase that should control this vault after the 48h timelock.'
+        : 'Paste the new 24-word recovery phrase that should upgrade this legacy vault to Poseidon2 after the 48h timelock.';
+    const rawMnemonic = prompt(promptText);
     if (!rawMnemonic) return;
 
     const nextMnemonic = normalizeMnemonicInput(rawMnemonic);
@@ -1101,10 +1329,11 @@ async function handleRotate() {
       return;
     }
 
-    const { rev, salt } = await deriveKeyMaterial(nextMnemonic);
+    const nextHashChoice: VaultHashChoice = 'poseidon2';
+    const { rev, salt } = await deriveKeyMaterial(nextMnemonic, nextHashChoice);
     try {
       await ensureWasmReady();
-      const nextIdCom = computeIdCom(rev, salt, CHAIN_ID);
+      const nextIdCom = computeIdCom(rev, salt, CHAIN_ID, nextHashChoice);
       if (nextIdCom === session.idCom) {
         showToast('That recovery phrase already controls this vault.', 'warn');
         return;
@@ -1121,6 +1350,8 @@ async function handleRotate() {
         proposeCalldata,
         'Generating a proof to start the 48h identity-rotation timelock...'
       );
+      storePendingRotation(session.vaultAddress, nextIdCom, nextHashChoice);
+      session.pendingHashChoice = nextHashChoice;
       showProofOverlay(false);
       showToast('Rotation proposed: ' + txHash.slice(0, 18) + '...', 'success');
       await renderDashboard();

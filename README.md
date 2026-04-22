@@ -23,14 +23,14 @@ Confirmed end-to-end quantum-resistant transactions on [Arbitrum](https://arbisc
 24-word BIP-39 mnemonic
   -> PBKDF2-SHA512 (600K iterations)
     -> Identity secret (REV)
-      -> Rescue-Prime hash -> Identity commitment (on-chain, 32 bytes)
+      -> Poseidon2 hash -> Identity commitment (on-chain, 32 bytes)
         -> STARK proof generated in browser (484 KB WASM, 5-10 sec)
           -> ERC-4337 UserOperation submitted via bundler
             -> On-chain STARK verification (~5.6M gas, ~$0.20 on L2)
               -> Transaction executed
 ```
 
-No ECDSA signature anywhere. No elliptic curves. The entire authorization chain uses only hash-based cryptography (Keccak256 + Rescue-Prime), which quantum computers cannot break.
+No ECDSA signature anywhere. No elliptic curves. The entire authorization chain uses only hash-based cryptography (Keccak256 + Poseidon2, with Rescue-Prime retained for legacy vaults), which quantum computers cannot break.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ No ECDSA signature anywhere. No elliptic curves. The entire authorization chain 
 Browser (no backend, no server)
   |-- BIP-39 Mnemonic -> PBKDF2-SHA512 -> REV (identity secret)
   |-- WASM Prover (Winterfell STARK, 484 KB)
-  |     |-- Rescue-Prime identity commitment
+  |     |-- Poseidon2 identity commitment (legacy Rescue-Prime supported)
   |     |-- 18-column AIR, 44 FRI queries, 20-bit PoW
   |     |-- 128-bit post-quantum security
   |-- ERC-4337 UserOperation construction
@@ -80,7 +80,7 @@ sdk/                     # TypeScript SDK (viem, bundler, paymaster)
 |-----------|-------|
 | Proof system | STARK (Winterfell 0.13, transparent) |
 | Field | Goldilocks (p = 2^64 - 2^32 + 1) + quadratic extension |
-| Hash functions | Keccak256 (Merkle/Fiat-Shamir), Rescue-Prime (commitments) |
+| Hash functions | Keccak256 (Merkle/Fiat-Shamir), Poseidon2 (commitments), Rescue-Prime for legacy vaults |
 | Trace | 18 columns x 8 rows |
 | FRI queries | 44 (132-bit soundness) |
 | Blowup factor | 8 (LDE domain = 64) |

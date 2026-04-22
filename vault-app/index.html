@@ -713,7 +713,7 @@ textarea.input {
         <div class="shield-core">🛡️</div>
       </div>
       <h1 class="onboard-title">Quantum-Resistant<br>Vault</h1>
-      <p class="onboard-sub">Protect your assets with browser-generated STARK proofs and explicit on-chain vault controls.</p>
+      <p class="onboard-sub">Protect your assets with browser-generated STARK proofs and explicit on-chain vault controls. New vaults use Poseidon2; imports auto-detect legacy Rescue vaults.</p>
     </div>
     <div class="onboard-actions">
       <button class="btn btn-primary" id="btn-create">Create New Vault</button>
@@ -728,7 +728,7 @@ textarea.input {
       <h2 class="send-title">Your Recovery Phrase</h2>
     </div>
     <div class="alert alert-warn">
-      Write these 24 words down and store them offline. Anyone with these words can access your vault. They cannot be recovered.
+      Write these 24 words down and store them offline. Anyone with these words can access your vault. They cannot be recovered. New vaults now use Poseidon2 by default.
     </div>
     <div class="mnemonic-grid" id="mnemonic-display"></div>
     <button class="btn btn-primary" id="btn-confirm-create" style="margin-top:12px">I've Written It Down</button>
@@ -741,7 +741,7 @@ textarea.input {
       <h2 class="send-title">Import Vault</h2>
     </div>
     <div class="input-group">
-      <label class="input-label">Enter your 24-word recovery phrase</label>
+      <label class="input-label">Enter your 24-word recovery phrase (legacy Rescue vaults are detected automatically)</label>
       <textarea class="input" id="import-mnemonic" placeholder="word1 word2 word3 ..."></textarea>
     </div>
     <button class="btn btn-primary" id="btn-confirm-import">Unlock Vault</button>

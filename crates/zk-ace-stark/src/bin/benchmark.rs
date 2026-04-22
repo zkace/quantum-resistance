@@ -4,7 +4,9 @@ use std::time::Instant;
 use winterfell::math::fields::f64::BaseElement;
 use winterfell::Prover;
 
-use zk_ace_stark::prover::{compute_public_inputs, default_proof_options, ZkAceProver, ZkAceWitness};
+use zk_ace_stark::prover::{
+    compute_public_inputs, default_proof_options, HashChoice, ZkAceProver, ZkAceWitness,
+};
 use zk_ace_stark::serialization::estimate_gas_cost;
 use zk_ace_stark::verifier::verify_proof;
 
@@ -21,6 +23,7 @@ fn main() {
         ctx_domain: BaseElement::new(42161), // Arbitrum One
         ctx_index: BaseElement::new(0),
         nonce: BaseElement::new(0),
+        hash_choice: HashChoice::Poseidon2,
     };
     let tx_hash = [BaseElement::new(0xAAAAu64), BaseElement::new(0xBBBBu64), BaseElement::new(0xCCCCu64), BaseElement::new(0xDDDDu64)];
     let public_inputs = compute_public_inputs(&witness, tx_hash);
@@ -46,7 +49,7 @@ fn main() {
 
     println!("━━━ Proof System ━━━");
     println!("  Type: STARK (FRI-based, hash-only)");
-    println!("  Hash: Rescue-Prime 64/256 (Rp64_256)");
+    println!("  Hash: Poseidon2 over Goldilocks (Plonky3 canonical)");
     println!("  Security: ~128-bit (32 queries, blowup 8)");
     println!("  Post-quantum: YES (no elliptic curves, no pairings)");
     println!("  Trusted setup: NONE (transparent)");

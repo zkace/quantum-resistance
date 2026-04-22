@@ -31,7 +31,7 @@ use winterfell::Prover;
 
 use zk_ace_stark::keccak_hasher::{KeccakDigest, KeccakHash};
 use zk_ace_stark::prover::{
-    compute_public_inputs, default_proof_options, ZkAceProver, ZkAceWitness,
+    compute_public_inputs, default_proof_options, HashChoice, ZkAceProver, ZkAceWitness,
 };
 use zk_ace_stark::verifier::verify_proof;
 
@@ -85,9 +85,20 @@ fn encode_u64(abi: &mut Vec<u8>, val: u64) {
     abi.extend_from_slice(&val.to_be_bytes());
 }
 
+fn parse_hash_choice(arg: Option<&String>) -> HashChoice {
+    match arg.map(|value| value.as_str()) {
+        Some("rescue") | Some("rescue-prime") | Some("rescue_prime") => HashChoice::RescuePrime,
+        Some("poseidon2") | None => HashChoice::Poseidon2,
+        Some(other) => panic!("unsupported hash choice: {other}"),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let hash_choice = parse_hash_choice(args.get(1));
+
     // =====================================================================
     // 1. Generate proof with 4-element tx_hash
     // =====================================================================
@@ -100,6 +111,7 @@ fn main() {
         ctx_domain: B::new(42161),
         ctx_index: B::new(0),
         nonce: B::new(nonce_val),
+        hash_choice,
     };
     let public_inputs = compute_public_inputs(&witness, tx_hash);
     let options = default_proof_options();
